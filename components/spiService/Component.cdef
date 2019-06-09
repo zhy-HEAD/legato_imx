@@ -1,0 +1,28 @@
+provides:
+{
+    api:
+    {
+        le_spi.api
+    }
+}
+
+sources:
+{
+    spiService.c
+}
+
+cflags:
+{
+    -std=c99
+    -I$LEGATO_ROOT/components/spiLibrary
+    -I$LEGATO_ROOT/components/watchdogChain
+}
+
+requires:
+{
+    component:
+    {
+        $LEGATO_ROOT/components/spiLibrary
+        $LEGATO_ROOT/components/watchdogChain
+    }
+}

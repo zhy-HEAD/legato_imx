@@ -1,0 +1,19 @@
+#
+# Configuration for Legato core daemons.
+#
+# Copyright (C) Sierra Wireless Inc.
+#
+
+### Daemon Options ###
+
+config WDOG_FRAMEWORK
+  bool "Enable Legato watchdog on framework services"
+  default y
+  ---help---
+  The watchdog observes the Legato framework daemons and, if one deadlocks,
+  restarts the system.
+
+rsource "linux/supervisor/KConfig"
+rsource "linux/serviceDirectory/KConfig"
+rsource "configTree/KConfig"
+rsource "linux/watchdog/KConfig"

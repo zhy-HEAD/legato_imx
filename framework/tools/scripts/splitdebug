@@ -1,0 +1,42 @@
+#! /bin/bash
+#
+# Split debug info into a separate file
+#
+
+set -e
+
+usage()
+{
+    echo >&2 "Usage: $0 -d debug_dir infile outfile"
+}
+
+while getopts "d:" OPTION; do
+    case $OPTION in
+        d)
+            DEBUG_DIR="$OPTARG"
+            ;;
+        [?])
+            usage
+            exit 1
+    esac
+done
+
+shift $((OPTIND-1))
+
+if [[ $# != 1 ]]; then
+    echo "Expected 1 argument, seen $#"
+    usage
+    exit 1
+fi
+
+export LANG=C
+BUILD_ID=$(${READELF} -n $1|sed 's/    Build ID: //;t;d')
+if [ $? -ne 0 -o -z "$BUILD_ID" ]
+then
+    echo "Failed to extract build ID from '$1'" >&2
+    exit 1
+fi
+
+mkdir -p $DEBUG_DIR/.build-id/${BUILD_ID:0:2}
+${OBJCOPY} --only-keep-debug $1 $DEBUG_DIR/.build-id/${BUILD_ID:0:2}/${BUILD_ID:2}.debug
+${STRIP} --strip-unneeded $1

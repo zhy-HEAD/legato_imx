@@ -1,0 +1,273 @@
+/** @page avConfigure Configuration Tips for AirVantage
+
+We've included some configuration tips to help when connecting to AirVantage, if you haven't
+registered your device yet follow the steps in @ref avRegister and
+[AirVantage Getting Started](https://source.sierrawireless.com/airvantage/av/howto/hardware/legato_getting_started/).
+
+@section avConfigure_Apps Check Running Services
+
+The AirVantage Connector (avcService) relies on the data connection services
+(dataConnectionService) for network connectivity. The data connection service is in turn relies
+on the modem service (modemService) and the cellnet service (cellNetService). Before you can
+connect to AirVantage, check that the @c avcService, @c dataConnectionService, @c modemService and
+@c cellNetService are running.
+
+<b>Command: @ref toolsTarget_app "app status"</b>
+
+Example:
+@verbatim
+# app status
+
+[running] atAirVantage
+[running] atQmiLinker
+[running] atService
+[running] audioService
+[running] avcCompat
+[running] avcService
+[running] cellNetService
+[running] dataConnectionService
+[running] fwupdateService
+[running] gpioService
+[running] modemService
+[running] positioningService
+[running] powerMgr
+[running] secStore
+[stopped] smsInboxService
+[stopped] spiService
+[stopped] tools
+[stopped] voiceCallService
+[stopped] wifi
+[stopped] wifiApTest
+[stopped] wifiClientTest
+[running] wifiService
+[stopped] wifiWebAp
+@endverbatim
+
+If you are running into errors, check what IPC bindings are needed for the avcService use the
+@ref toolsTarget_sdir tool.
+
+@verbatim
+# sdir list         #  list of all the IPC services known by the Service Directory
+@endverbatim
+
+@section avConfigure_Data Check the Data Connection
+
+The @c dataConnectionService can be used to connect to WiFi or the Cellular network. If all WIFI
+related services are stopped the @c dataConnectionService will default to the Cellular Network.  To
+connect to cellular network we need to make sure that the SIM is registered to the network and the
+signal strength is good.
+
+<b>Command: @ref toolsTarget_cm "cm radio"</b>
+
+Example:
+@verbatim
+cm radio
+
+Power: ON
+Current Network Operator: BLOGS
+RAT: UMTS network (LE_MRC_RAT_UMTS)
+Status: Registered, home network (LE_MRC_REG_HOME)
+Signal: Strong signal strength (4)
+PS: Packet Switched Registered, home network (LE_MRC_REG_HOME)
+@endverbatim
+The SIM is registered and has a strong signal strength on the UMTS network.
+
+To make sure there is an Access Point Name (APN) set up for data connectivity:
+
+<b>Command: @ref toolsTarget_cm "cm data"</b>
+
+Example:
+@verbatim
+# cm data
+
+Index: 1
+APN: sp.blogs.com
+PDP Type: IPV4
+Connected: no
+@endverbatim
+
+AirVantage server only supports IPV4 for PDP. If your PDP connection is not using IPV4 you can
+change it with the following:
+
+<b>Command: @ref toolsTarget_cm "cm data pdp IPV4"</b>
+
+@section avConfigure_IP Check the IP Address
+
+To establish a data connection, make sure the data connection is established, and an IP address can
+be obtained.
+
+<b>Command: @ref toolsTarget_cm "cm data connect"</b>
+
+Example:
+
+@verbatim
+# cm data connect
+
+Setting up profile 1
+Setting access point name ... ok
+Setting packet data protocol ... ok
+Setting Authentication ... ok
+Connecting ... ok
+Checking if device is up ... ok
+Routing ... ok
+Updating /etc/resolv.conf ... ok
+Updating /etc/resolv.conf ... ok
+Testing connection ... ok
+@endverbatim
+
+From the above output the device is currently using profile 1 which is the APN (sp.blogs.com) and
+that the routing table is ok.
+Verify the IP address with the following command.
+
+<b>Command: @ref toolsTarget_cm "cm data"</b>
+
+Example:
+@verbatim
+# cm data
+
+Index: 1
+APN: sp.blogs.com
+PDP Type: IPV4
+Connected: yes
+Interface: rmnet0
+Family: inet
+IP: 123.345.567.789
+Gateway: 123.1.1.1
+Dns1: 123.123.123.123
+Dns2: 123.123.123.321
+@endverbatim
+
+@section avConfigure_Ping Check Network Connections
+
+You should now be able to ping the outside world.
+
+Example:
+@verbatim
+# ping google.com
+PING google.com (216.58.193.78) 56(84) bytes of data.
+64 bytes from sea15s07-in-f14.1e100.net (216.58.193.78): icmp_seq=1 ttl=54 time=6.19 ms
+64 bytes from sea15s07-in-f14.1e100.net (216.58.193.78): icmp_seq=2 ttl=54 time=9.55 ms
+64 bytes from sea15s07-in-f14.1e100.net (216.58.193.78): icmp_seq=3 ttl=54 time=6.07 ms
+64 bytes from sea15s07-in-f14.1e100.net (216.58.193.78): icmp_seq=4 ttl=54 time=5.73 ms
+64 bytes from sea15s07-in-f14.1e100.net (216.58.193.78): icmp_seq=5 ttl=54 time=19.3 ms
+64 bytes from sea15s07-in-f14.1e100.net (216.58.193.78): icmp_seq=6 ttl=54 time=5.80 ms
+@endverbatim
+
+Ping the AirVantage bootstrap server.
+@verbatim
+# ping bs.airvantage.net
+PING bs.airvantage.net (52.24.215.63): 56 data bytes
+64 bytes from 52.24.215.63: seq=0 ttl=234 time=269.007 ms
+64 bytes from 52.24.215.63: seq=1 ttl=234 time=258.111 ms
+64 bytes from 52.24.215.63: seq=2 ttl=234 time=707.798 ms
+64 bytes from 52.24.215.63: seq=3 ttl=234 time=237.510 ms
+64 bytes from 52.24.215.63: seq=4 ttl=234 time=246.483 ms
+@endverbatim
+
+@section avConfigure_UserAgreements Configure user agreements
+
+Before starting a session with the AirVantage server, check the user agreements and configure them
+if needed using APIs le_avc_GetUserAgreement()/le_avc_SetUserAgreement() or using the @c AT command.
+
+By default, user agreements are disabled. This means that avcService automatically accepts requests
+from the server without asking for user approval: it initiates a connection to the server,
+download/install packages and reboots the target if needed.
+
+If you want to have control on these operations and be able to accept or defer them, you need to
+enable the corresponding user agreement for each operation (connect, download, install, uninstall,
+reset). Thus, avcService notifies registered apps each time a pending request is ongoing and waits
+for your approval.
+
+Example for WPX5XX/WP76XX/FX30 Customers:
+@verbatim
+AT+WDSC?
+
++WDSC: 0,0 # user agreement for connection to server disabled
++WDSC: 1,0 # user agreement for package download disabled
++WDSC: 2,0 # user agreeemnt for package install disabled
++WDSC: 3,0
++WDSC: 4,15,60,240,480,1440,2880,0,0
++WDSC: 5,0 # user agreement for reboot disabled
++WDSC: 6,0 # user agreeemnt for package uninstall disabled
+
+OK
+
+AT+WDSC=3,1 # activates user agreement for package download
+AT+WDSC=4,1 # activates user agreement for package install
+@endverbatim
+
+@section avConfigure_Connect Connect to the AirVantage server
+
+At this point the target is ready to be connected to the AirVantage server. Use the api
+le_avc_StartSession() to start a session or use the @c AT command to connect the device to
+AirVantage.
+
+Steps to connect to the AirVantage server with AT commands:
+ - @c ssh to device: @c ssh @c 192.168.2.2
+ - open an AT connection: <c>microcom -E /dev/ttyAT</c>
+ - enable all notification: @c AT+WDSI=4479
+ - connect to the AirVantage server: @c AT+WDSS=1,1
+
+Example for WPX5XX/WP76XX/FX30 Customers:
+@verbatim
+# microcom -E /dev/ttyAT
+AT+WDSI=4479  # activates all AirVantage server notifications
+OK
+AT+WDSS=1,1   # starts a connection to the AirVantage server
+OK
++WDSI: 4      # displays the current state of authentication notification
++WDSI: 6      # displays that the session has succeeded and has started
++WDSI: 23,1   # displays that the target has successfully connected to the AirVantage Service
+@endverbatim
+
+For information on AT Commands download the AT Command Reference from your module provider.
+
+[AirPrime WPX5XX/WP76XX AT Command Reference](https://source.sierrawireless.com/resources/airprime/software/airprime_wpx5xx_wp76xx_wp77xx_at_command_reference/)
+
+If you check on the AirVantage Web Admin Console you will see that the "Comm. Status"
+should be green and the Last Seen should indicate very recent.
+
+@section avConfigure_Frequency Configure Frequency of Connections
+
+Within your Polling Timer, Hearbeat and Lifetime are all set the same and indicate how frequently
+the device connects to the AirVantage server.
+
+The Polling Timer can be enabled by setting it to a non-zero value either with
+le_avc_SetPollingTimer(), or by using the following AT commands:
+
+Example of setting the polling timer to 1 minute.
+@verbatim
+# microcom /dev/ttyAT
+AT+WDSC=3,1           # 3 specifies the polling timer, and 1 sets the number of minutes
+OK
+@endverbatim
+
+Retry timers are built into the AVC API to build resiliency into the system.
+
+Example Scenario: Let's say we set the polling timer to connect to the server every 24 hours. The
+mobile device may be in an area where there is a network loss that happens everyday and prevents
+the target from connecting.  The device will never be able to establish a connection to the
+AirVantage server in this case because it's trying to connect to server only when there is no
+network.  To prevent this Retry timers should be set at a variety of times enabling a greater
+chance of strong network connections.
+
+Retry Timers can be initiated by using either le_avc_StartSession() or by setting the polling timer.
+If the session fails, the retry timers can use up to 8 attempts to connect back to the AirVantage
+server.
+
+The retry timer can be set using le_avc_SetRetryTimers() or by using the following AT commands:
+
+Example of setting the retry timer:
+@verbatim
+# microcom /dev/ttyAT
+AT+WDSC=4,15,60,240,480,1440,2880,0,0  # 4 specifies the retry timer
+OK
+@endverbatim
+
+Above command indicates that a retry will be attempted retried after 15 minutes, 1 hour, 4 hours,
+8 hours, 1 day and 2 days, the last two retries are disabled.
+
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

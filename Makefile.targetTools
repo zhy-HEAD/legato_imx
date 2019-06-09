@@ -1,0 +1,218 @@
+# --------------------------------------------------------------------------------------------------
+# Makefile used to build the Legato framework on-target tools.
+#
+# Build output is placed under $(LEGATO_ROOT)/build/$(TARGET)/framework/bin (and lib).
+#
+# This Makefile is intended to run as part of a larger build system.  The following variables
+# should be set by that system:
+#
+# - TARGET = e.g., localhost, ar7, wp85, raspi, etc.
+# - CC = path to the appropriate C compiler for the target.
+# - STRIP = path to the appropriate debug symbol stripper for the target.
+# - READELF = path to the appropriate ELF file info extractor for the target.
+# - OBJCOPY = path to the appropriate object file copier/translator utility for the target.
+#
+# Copyright (C) Sierra Wireless Inc.
+# --------------------------------------------------------------------------------------------------
+
+include utils.mk
+
+BUILD_PRODUCTS = 	config		\
+					log		\
+					sdir	\
+					gdbCfg	\
+					straceCfg	\
+					inspect	\
+					xattr	\
+					appStopClient	\
+					app \
+					update \
+					sbtrace \
+					scripts \
+					devMode
+
+# Create a list of all proprietary apps, then add them as product to build
+ifneq ($(findstring $(TARGET), wp750x wp85 wp76xx wp77xx),)
+  APPS_PROPRIETARY_SRC_DIR = $(LEGATO_ROOT)/apps/proprietary
+  ifneq ($(wildcard $(APPS_PROPRIETARY_SRC_DIR)/atAirVantage/src/atAirVantage.adef),)
+    PROPRIETARY_APPS += atAirVantage
+  endif
+  ifneq ($(wildcard $(APPS_PROPRIETARY_SRC_DIR)/atQmiLinker/src/atQmiLinker.adef),)
+    PROPRIETARY_APPS += atQmiLinker
+  endif
+  ifneq ($(wildcard $(APPS_PROPRIETARY_SRC_DIR)/qmiAirVantage/src/qmiAirVantage.adef),)
+    PROPRIETARY_APPS += qmiAirVantage
+  endif
+endif
+BUILD_PRODUCTS += ${PROPRIETARY_APPS}
+
+# Make sure required variables are set.
+ifndef TARGET
+  $(error TARGET is not set)
+endif
+ifndef CC
+  $(error CC is not set)
+endif
+ifndef STRIP
+  $(error STRIP is not set)
+endif
+ifndef OBJCOPY
+  $(error OBJCOPY is not set)
+endif
+ifndef READELF
+  $(error READELF is not set)
+endif
+
+export LEGATO_ROOT ?= $(CURDIR)
+export LEGATO_TARGET := $(TARGET)
+
+BUILD_DIR := $(LEGATO_ROOT)/build/$(TARGET)/framework
+BUILD_APP_DIR := $(LEGATO_ROOT)/build/$(TARGET)/apps
+BIN_DIR := $(BUILD_DIR)/bin
+APP_DIR := $(LEGATO_ROOT)/build/$(TARGET)/tools
+LIB_DIR := $(BUILD_DIR)/lib
+
+LOCAL_MKTOOLS_FLAGS = -t $(TARGET)
+
+LOCAL_MKEXE_FLAGS = $(MKEXE_FLAGS) -l $(LIB_DIR) -w $(BUILD_DIR)/tools/$@ $(LOCAL_MKTOOLS_FLAGS)
+LOCAL_MKAPP_FLAGS = $(MKAPP_FLAGS) -o $(APP_DIR) -w $(BUILD_APP_DIR)/tools/$@ $(LOCAL_MKTOOLS_FLAGS)
+LOCAL_PROPRIETARY_APPS_FLAGS = $(LOCAL_MKTOOLS_FLAGS)
+
+ifeq ($(LE_CONFIG_ENABLE_IMA),y)
+  LOCAL_MKAPP_FLAGS += -S
+  LOCAL_PROPRIETARY_APPS_FLAGS += -S
+endif
+
+# Add the framework's bin directory to the PATH environment variable.
+export PATH := $(PATH):$(LEGATO_ROOT)/bin
+
+LIBJANSSON = $(LIB_DIR)/libjansson.so
+JANSSON_INC_DIR = $(LEGATO_ROOT)/build/$(TARGET)/framework/libjansson/include/
+TOOLS_SRC_DIR = $(LEGATO_ROOT)/framework/tools/target/linux
+APP_TOOLS_SRC_DIR = $(LEGATO_ROOT)/apps/tools
+LIBLEGATO_SRC_DIR = $(LEGATO_ROOT)/framework/liblegato
+DAEMON_SRC_DIR = $(LEGATO_ROOT)/framework/daemons/linux
+LEGATO_INTERFACES_DIR = $(LEGATO_ROOT)/interfaces
+
+### Recipes ###
+
+.PHONY: all $(BUILD_PRODUCTS)
+all: $(BUILD_PRODUCTS)
+
+$(LIB_DIR):
+	$(Q)mkdir -p $@
+
+# Currently, the config tool depends on libjansson, which is built using CMake.
+$(LIBJANSSON): $(LIB_DIR)
+	$(Q)mkdir -p $(BUILD_DIR)/libjansson
+	$(L) CMAKE $@
+	$(Q)cd $(BUILD_DIR)/libjansson && \
+		cmake $(LEGATO_ROOT)/3rdParty/jansson \
+			-DCMAKE_TOOLCHAIN_FILE=$(LEGATO_ROOT)/cmake/toolchain.yocto.cmake \
+			-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(LIB_DIR) \
+			-DBUILD_SHARED_LIBS=ON \
+			-DJANSSON_BUILD_SHARED_LIBS=ON \
+			-DJANSSON_WITHOUT_TESTS=ON \
+			-DJANSSON_EXAMPLES=OFF \
+			-DJANSSON_BUILD_DOCS=OFF $(VOUTPUT) 2>&1
+	$(L) MAKE $@
+	$(Q)make -C $(BUILD_DIR)/libjansson $(VOUTPUT)
+	$(Q)cp -d $(BUILD_DIR)/libjansson/lib/libjansson.so* $(LIB_DIR)
+
+config: $(LIBJANSSON)
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ $(TOOLS_SRC_DIR)/config \
+			-i $(JANSSON_INC_DIR) \
+			-i $(LIBLEGATO_SRC_DIR) \
+			--ldflags=-L$(LIB_DIR) \
+			--ldflags=-ljansson \
+			$(LOCAL_MKEXE_FLAGS)
+
+log:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/logTool/logTool.c \
+			-i $(LIBLEGATO_SRC_DIR) \
+			-i $(DAEMON_SRC_DIR)/logDaemon \
+			$(LOCAL_MKEXE_FLAGS)
+
+sdir:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/sdirTool \
+			-i $(LIBLEGATO_SRC_DIR) \
+			-i $(LIBLEGATO_SRC_DIR)/linux \
+			-i $(DAEMON_SRC_DIR)/serviceDirectory \
+			--ldflags=-Wl,--enable-new-dtags,-rpath="/legato/systems/current/lib" \
+			$(LOCAL_MKEXE_FLAGS)
+
+gdbCfg:
+	$(Q)ln -sf debugCfg $(BIN_DIR)/gdbCfg
+
+straceCfg:
+	$(Q)ln -sf debugCfg $(BIN_DIR)/straceCfg
+
+inspect:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/inspect/inspect.c \
+			-i $(LIBLEGATO_SRC_DIR) \
+			-i $(LIBLEGATO_SRC_DIR)/linux \
+			-i $(DAEMON_SRC_DIR) \
+			$(LOCAL_MKEXE_FLAGS)
+
+xattr:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/xattr/xattr.c \
+			-i $(LIBLEGATO_SRC_DIR) \
+			$(LOCAL_MKEXE_FLAGS)
+
+appStopClient:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/_$@ \
+			$(TOOLS_SRC_DIR)/appStopClient/appStopClient.c \
+			-i $(LIBLEGATO_SRC_DIR) \
+			$(LOCAL_MKEXE_FLAGS)
+
+app:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/appCtrl \
+			-i $(LEGATO_INTERFACES_DIR)/supervisor \
+			-i $(LIBLEGATO_SRC_DIR) \
+			-i $(LIBLEGATO_SRC_DIR)/linux \
+			$(LOCAL_MKEXE_FLAGS)
+
+update:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/$@ \
+			$(LOCAL_MKEXE_FLAGS)
+
+sbtrace:
+	$(L) MKEXE $(BIN_DIR)/$@
+	$(Q)mkexe -o $(BIN_DIR)/$@ \
+			$(TOOLS_SRC_DIR)/$@ \
+			-i $(LIBLEGATO_SRC_DIR)/linux \
+			$(LOCAL_MKEXE_FLAGS)
+
+scripts:
+	$(Q)cp -u -P --preserve=all $(wildcard framework/tools/target/linux/bin/*) $(BIN_DIR)
+
+devMode:
+	$(L) MKAPP $@
+	$(Q)mkapp $(APP_TOOLS_SRC_DIR)/$@.adef -i $(LIBLEGATO_SRC_DIR) $(LOCAL_MKAPP_FLAGS)
+
+# Rule to bundle proprietary apps
+${PROPRIETARY_APPS}: export LEGATO_PROPRIETARY_QCT_DIR=${LEGATO_ROOT}/proprietary/qct/${LEGATO_TARGET}
+${PROPRIETARY_APPS}:
+	$(L) MKAPP $@
+	$(Q)mkapp $(APPS_PROPRIETARY_SRC_DIR)/$@/src/$@.adef \
+			-b \
+			-i $(LEGATO_ROOT)/interfaces/modemServices \
+			-i $(LEGATO_ROOT)/interfaces/atServices \
+			-t $(TARGET) \
+			-o $(LEGATO_ROOT)/build/$(TARGET)/proprietary/$@ \
+			-w $(LEGATO_ROOT)/build/$(TARGET)/apps/proprietary/$@ \
+			$(LOCAL_PROPRIETARY_APPS_FLAGS)

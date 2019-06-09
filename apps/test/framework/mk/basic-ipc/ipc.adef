@@ -1,0 +1,19 @@
+executables:
+{
+  server = (greetServer)
+  client = (greetClient)
+}
+
+processes:
+{
+  run:
+  {
+    greet = (client)
+    (server "Greetings, World!" blah)
+  }
+}
+
+bindings:
+{
+    client.greetClient.hello -> server.greetServer.hello
+}

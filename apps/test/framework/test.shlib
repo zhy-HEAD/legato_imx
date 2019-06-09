@@ -1,0 +1,185 @@
+#!/bin/bash
+# Copyright (C) Sierra Wireless Inc.
+
+# This file contains a few functions that are used in multiple test scripts.
+# Source this file to use the functions
+
+# Load generic shlib
+. $LEGATO_ROOT/framework/tools/scripts/shlib
+
+# This is the path to the utilities on the target. It is not part of the
+# defined path on ssh log in.
+BIN_PATH="/legato/systems/current/bin"
+
+OnExit () {
+    # override OnExit to do your cleanup (on fail OR success)
+    :
+}
+trap OnExit EXIT
+
+OnFail () {
+    # override OnFail to do things that need to be done when tests fail
+    echo "---Fail---"
+}
+
+#---------------------------------------------------------------------------------------------------
+#  Checks the return value of the last executed command.  If the return value indicates failure,
+#  then it will exit the script.
+#---------------------------------------------------------------------------------------------------
+CheckRet () {
+    RETVAL=$?
+
+    if [ $RETVAL -ne 0 ]; then
+        echo -e $COLOR_ERROR "Exit Code $RETVAL" $COLOR_RESET
+        OnFail
+        exit $RETVAL
+    fi
+}
+
+# DoTheTest is an internal function and not intended for use outside this file
+DoTheTest () {
+    str=$1
+    num=$2
+    comp=$3
+    expect=$4
+
+    if ! TestMatches $num $comp $expect
+    then
+        echo "$num occurances of '$str' but $comp $expect expected"
+        echo "+++ System Log Follows +++"
+        ssh root@${targetAddr:?} "/sbin/logread"
+        echo "+++ End System Log +++"
+        OnFail
+        exit 1
+    fi
+}
+
+# TestMatches is an internal function and not intended for use outside this file
+TestMatches () {
+    numMatches=$1
+    test=$2
+    targetNum=$3
+
+    case $test in
+        '==') [ $numMatches -eq $targetNum ] ;;
+        '!=') [ $numMatches -ne $targetNum ] ;;
+        '<')  [ $numMatches -lt $targetNum ] ;;
+        '>')  [ $numMatches -gt $targetNum ] ;;
+        *)    echo "Bad test argument to TestMatches in test.shlib $@"
+              OnFail
+              exit 2 ;;
+    esac
+}
+
+#---------------------------------------------------------------------------------------------------
+# Install the provided app on the target.
+#
+# params:
+#       app             Either an app name (and it will find the update file) or an update file
+#---------------------------------------------------------------------------------------------------
+InstallApp () {
+    app=$1
+    checkOk=${2:-true}
+    file=$app
+
+    if ! [ -e $file ]; then
+        if [ -z "$targetType" ]; then
+            echo "Unable to install '$app', $$targetType unset"
+            exit 1
+        fi
+
+        file="${file}.${targetType}.update"
+        if ! [ -e $file ]; then
+            echo "Unable to install '$app': no update file found"
+            exit 1
+        fi
+    fi
+
+    echo "Installing '$app' (instapp $file $targetAddr)"
+    instapp $file $targetAddr
+    ret=$?
+
+    if [ $ret -ne 0 ]; then
+        if [[ "$checkOk" == "true" ]]; then
+            echo "Install failed"
+            exit 1
+        else
+            echo "Install failed: ignoring"
+        fi
+    fi
+
+    return $ret
+}
+
+#---------------------------------------------------------------------------------------------------
+# Return 0 if given app is running, and 1 otherwise.
+#---------------------------------------------------------------------------------------------------
+IsAppRunning () {
+    local appName=$1
+
+    numMatches=$(SshToTarget "$BIN_PATH/app status $appName | grep -c \"running\"")
+
+    if [ -z "${numMatches}" ] || [ $numMatches -eq 0 ]
+    then
+        # App is not running.
+        return 1
+    else
+        # App is running.
+        return 0
+    fi
+}
+
+#---------------------------------------------------------------------------------------------------
+# Clear logs on target.
+#---------------------------------------------------------------------------------------------------
+ClearLogs () {
+    echo "Clear the logs."
+    ssh root@$targetAddr 'export PATH=/sbin:$PATH && ( /etc/init.d/syslog stop || true ) && /etc/init.d/syslog start'
+    CheckRet
+}
+
+#---------------------------------------------------------------------------------------------------
+# Checks if the logStr is in the logs.
+#
+# params:
+#       comparison      Either "==", ">", "<", "!="
+#       numMatches      The number of expected matches.
+#       logStr          The log string to search for.
+#---------------------------------------------------------------------------------------------------
+CheckLogStr () {
+
+    comparison=$1
+    expectedMatches=$2
+    logStr=$3
+
+    echo "Looking for $logStr"
+    numMatches=$(ssh root@$targetAddr "/sbin/logread | grep -c \"$logStr\"")
+
+    echo "$numMatches matches for '$logStr' "
+
+    DoTheTest "$logStr" $numMatches $comparison $expectedMatches
+}
+
+#---------------------------------------------------------------------------------------------------
+# Checks if the logStr is in the logs.
+#
+# params:
+#       logPath         Path to the log file to check.
+#       comparison      Either "==", ">", "<", "!="
+#       numMatches      The number of expected matches.
+#       logStr          The log string to search for.
+#---------------------------------------------------------------------------------------------------
+CheckLogfileStr () {
+
+    logPath=$1
+    comparison=$2
+    expectedMatches=$3
+    logStr=$4
+
+    numMatches=$(ssh root@$targetAddr "cd $(dirname $logPath) && ls -1 | grep '$(basename $logPath)' | xargs grep -c '$logStr'")
+
+    echo "$numMatches matches for '$logStr' with logPath='$logPath'"
+
+    DoTheTest "$logStr" $numMatches $comparison $expectedMatches
+}
+

@@ -1,0 +1,14 @@
+requires:
+{
+    api:
+    {
+        send = send_util.api
+        le_mdmDefs.api [types-only]
+        le_sms.api [types-only]
+    }
+}
+
+sources:
+{
+    send.c
+}

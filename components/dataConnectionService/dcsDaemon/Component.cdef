@@ -1,0 +1,42 @@
+provides:
+{
+    api:
+    {
+        le_data.api
+    }
+}
+
+requires:
+{
+    api:
+    {
+        modemServices/le_mdmDefs.api [types-only]
+        modemServices/le_mrc.api
+        le_cfg.api
+        ${LEGATO_ROOT}/interfaces/wifi/le_wifiClient.api [optional]
+    }
+
+    component:
+    {
+        $LEGATO_DCS_PA_DEFAULT
+        $LEGATO_DCS_PA
+        ${LEGATO_ROOT}/components/watchdogChain
+    }
+}
+
+sources:
+{
+    dcsServer.c
+    dcsTechRank.c
+}
+
+cflags:
+{
+    -I$LEGATO_ROOT/components/cfgEntries
+    -I$LEGATO_ROOT/components/modemServices/platformAdaptor/inc
+    -I$LEGATO_ROOT/components/dataConnectionService/platformAdaptor/inc
+    -I$LEGATO_ROOT/components/dataConnectionService/dcs
+    -I$LEGATO_ROOT/components/dataConnectionService/dcsNet
+    -I$LEGATO_ROOT/components/dataConnectionService/dcsCellular
+    -I${LEGATO_ROOT}/components/watchdogChain
+}

@@ -1,0 +1,44 @@
+/**
+ * Common definitions potentially used across multiple .api files
+ */
+
+USETYPES defn;
+
+
+/**
+ * Definition example
+ */
+DEFINE FOUR = 4;
+
+/**
+ * Example of using previously DEFINEd symbol within an imported file.
+ */
+DEFINE TEN = FOUR + defn.SIX;
+
+/**
+ * Reference example
+ */
+REFERENCE OpaqueReference;
+
+/**
+ * ENUM example
+ */
+ENUM EnumExample
+{
+    ZERO,     ///< first enum
+    ONE,      ///< second enum
+    TWO,      ///< third enum
+    THREE     ///< fourth enum
+};
+
+/**
+ * BITMASK example
+ */
+BITMASK BitMaskExample
+{
+    BIT0,     ///< first
+    BIT1,     ///< second
+    BIT2,     ///< third
+};
+
+

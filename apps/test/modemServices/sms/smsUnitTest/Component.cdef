@@ -1,0 +1,35 @@
+requires:
+{
+    api:
+    {
+        modemServices/le_sms.api        [types-only]
+        modemServices/le_mdmDefs.api    [types-only]
+        modemServices/le_sim.api        [types-only]
+        modemServices/le_mrc.api        [types-only]
+        le_cfg.api                      [types-only]
+    }
+}
+
+sources:
+{
+    main.c
+    smsPduTest.c
+    cdmaPduTest.c
+    smsApiUnitTest.c
+    smsStub.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/le_sms.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/le_mrc.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/le_sim.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/smsPdu.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/cdmaPdu.c
+    simu/components/le_pa/pa_mrc_simu.c
+    simu/components/le_pa/pa_sim_simu.c
+    simu/components/le_pa/pa_sms_simu.c
+    simu/le_cfg_simu.c
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/watchdogChain
+    -Dle_msg_AddServiceCloseHandler=MyAddServiceCloseHandler
+}

@@ -1,0 +1,151 @@
+/** @page buildToolsmkapp mkapp
+
+@c mkapp can be used to @ref buildToolsmkapp_BinPack "build a binary app package (<c>.app</c> file)"
+that can be later built into a larger system of interworking apps using @ref buildToolsmksys.
+You might want to use @c mkapp in this way if you want to provide an app to someone but you can't
+share your app's source code with them for whatever reason.
+
+@c mkapp can also be used with some target devices (e.g., Linux-based targets) to
+@ref buildToolsmkapp_AppBundle "build a single app in isolation", producing an
+@ref legatoServicesUpdatePack "update pack" that can be used to install just that one
+app onto the target, without touching any of the other apps that are already running on the
+target device.  It is recommended that you do not do things this way, though. Building complete
+systems of interworking apps using @ref buildToolsmksys is the preferred approach.
+
+The main input for @c mkapp is an @ref defFilesAdef file that contains these definitions:
+
+ - executables to build when the app is built
+ - components and/or other files to build into those executables
+ - other files to be included as a part of the app
+ - if the app will run in a sandbox, files to access outside the sandbox
+ - executables to run when the app is started
+ - command-line arguments and environment variables to pass to those apps
+ - limits to place on the app (CPU, memory, etc.)
+
+@c mkapp will parse the .adef file, determine which components, interface definitions, and other
+source files are needed, build those into the libraries and executables required, generate the
+on-target configuration data needed, and add everything to an app bundle.
+
+See @ref defFilesAdef for details on app def files.
+
+See @ref defFiles for more info on Legato definition files, in general.
+
+See @ref buildToolsmk_ToolChainConfig for information on how @c mkapp decides what compilers, etc.
+to use.
+
+
+@section buildToolsmkapp_BinPack Building a Binary App Package
+
+There may be occasions when you want or need to distribute an app for inclusion in
+another user's system, but you cannot distribute the source code for this app.  In that case
+you can use @c mkapp with the @c -b (or @c --bin-pack) option.  For example, building a simple
+@c helloWorld style app:
+
+@verbatim
+$ mkapp -t wp85 helloWorld.adef -b
+@endverbatim
+
+This will produce a file called @c helloWorld.wp85.app which is a binary app package ready for
+distribution to others for inclusion in their system builds.  To use this
+binary app package, simply include it in the @c apps section of your system's @c .sdef file,
+like you would with a @c .adef file:
+
+@verbatim
+apps:
+{
+    helloWorld.wp85.app
+}
+@endverbatim
+
+Note that this binary app package is compiled specifically for the given target, so an app compiled
+for one target is not necessarily compatible with another target.
+
+@section buildToolsmkapp_AppBundle Building an App Bundle
+
+@c mkapp can be used to generate an app bundle (also known as an
+@ref legatoServicesUpdatePack "update pack [@c .update] file") to install and run on a target device.
+
+App bundles (@c .update files) are compressed archives that can be used to:
+
+ - Install your app on a target.
+ - Update your app to a new version.
+
+But, use of @ref buildToolsmksys is preferred over using @c mkapp in this way.
+@ref buildToolsmksys produces a full system bundle which has the following benefits:
+
+ - limits the risk of leaving your target in a bad state
+ - performs some inter-app consistency checks (e.g., checks for typos in bindings)
+ - ensures that all apps are updated together
+ - reduces the chances of an app hanging at start-up because of missing or misspelled bindings
+
+@section buildToolsmkapp_Usage Usage
+
+@c mkapp provides flags to set the target, set build options, and specify additional search
+directories:
+
+@verbatim
+Command line parameters
+  -C, --cflags, <string>
+        (Multiple, optional) Specify extra flags to be passed to the C compiler.
+
+  -L, --ldflags, <string>
+        (Multiple, optional) Specify extra flags to be passed to the linker when linking executables.
+
+  -X, --cxxflags, <string>
+        (Multiple, optional) Specify extra flags to be passed to the C++ compiler.
+
+  -a, --append-to-version, <string>
+        (Multiple, optional) Specify a suffix to append to the application version specified in the
+        .adef file.  Will automatically insert a '.' between the .adef's version string and any
+        version strings specified on the command-line.  Multiple occurrences of this argument will
+        be combined into a single string.
+
+  -b, --bin-pack
+        (Optional) Generate a binary-app package instead of a .update file. Binary-app packages can
+        be used to distribute an application without its original source code.  This binary app
+        package file is intended to be included in a system definition (.sdef)  file's 'apps:'
+        section in place of a .adef file.
+
+  -c, --component-search, <string>
+        (Multiple, optional) (DEPRECATED) Add a directory to the source search path (same as -s).
+
+  -d, --debug-dir, <string>
+        (Optional) Generate debug symbols and place them in the specified directory.  Debug symbol
+        files will be named with build-id
+
+  -g, --generate-code
+        (Optional) Only generate code, but don't compile, link, or bundle anything. The interface
+        definition (include) files will be generated, along with component and executable main files
+        and configuration files. This is useful for supporting context-sensitive auto-complete and
+        related features in source code editors, for example.
+
+  -i, --interface-search, <string>
+        (Multiple, optional) Add a directory to the interface search path.
+
+  -n, --dont-run-ninja
+        (Optional) Even if a build.ninja file exists, ignore it, delete the staging area, parse all
+        inputs, and generate all output files, including a new copy of the build.ninja, then exit
+        without running ninja.  This is used by the build.ninja to to regenerate itself and any
+        other files that need to be regenerated when the build.ninja finds itself out of date.
+
+  -o, --output-dir, <string>
+        (Optional) Specify the directory into which the final, built application file (ready to be
+        installed on the target) should be put.
+
+  -s, --source-search, <string>
+        (Multiple, optional) Add a directory to the source search path.
+
+  -t, --target, <string>
+        (Optional) Set the compile target (wp85 | wp76xx).
+
+  -v, --verbose
+        (Optional) Set into verbose mode for extra diagnostic information.
+
+  -w, --object-dir, <string>
+        (Optional) Specify the directory into which any intermediate build artifacts (such as .o
+        files and generated source code files) should be put.
+@endverbatim
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

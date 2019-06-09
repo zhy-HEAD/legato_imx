@@ -1,0 +1,358 @@
+#!/usr/bin/python2.7 -E
+#
+# Code generator main program
+#
+# Copyright (C) Sierra Wireless Inc.
+#
+
+# Python libraries
+import os
+import sys
+import argparse
+import collections
+import hashlib
+import importlib
+
+# Templating library
+import jinja2
+
+# ifgen extensions for templating library
+import ifgenJinjaExtensions
+
+# Need to init logging settings here, before any ifgen specific libraries are imported, in case
+# they call logging functions in their module level code.  Prefix the message with 'IFGEN' so that
+# it is easier to filter these messages, if ifgen is called during a build.
+import logging
+logging.basicConfig(format="IFGEN_%(levelname)s:%(module)s/%(funcName)s/%(lineno)s: %(message)s")
+
+# This could probably be determined by calling the appropriate logging functions, but since
+# this info is published in the documentation, no harm defining it explicitly.
+LogLevelMapping = dict( DEBUG=10,
+                        INFO=20,
+                        WARNING=30,
+                        ERROR=40,
+                        CRITICAL=50 )
+
+
+# ifgen specific libraries
+import interfaceParser
+
+
+def GetInitialArguments(argList):
+    # Define a parser for the '--lang' argument. Also include the logging/tracing arguments here,
+    # so that they can be used as early as possible.
+    #
+    # Note that if there is an error in specifying the value for any of these args, then the error
+    # output will only mention these args, and not the full list, e.g. incorrect level given for
+    # --log-level. I don't see this as a significant issue that would need to be addressed.
+
+    parser = argparse.ArgumentParser(add_help=False)
+
+    parser.add_argument('--lang',
+                        dest="language",
+                        default='C',
+                        help='specify target language; defaults to C')
+
+    parser.add_argument('--log-level',
+                        dest="logLevel",
+                        action="store",
+                        choices = LogLevelMapping,
+                        default='',
+                        help='set logging level')
+
+    # Parse the command lines arguments for the initial args only.
+    args, leftOver = parser.parse_known_args(argList)
+
+    # Return the value of the initial arguments.
+    # Also need to return the parser to add it to the main argument parser.  This is mainly
+    # so it gets included in the --help output.
+    return args, parser
+
+
+
+def CreateArgumentParser(parentParser):
+    # Define the command line arguments/options
+    parser = argparse.ArgumentParser(description='Interface Code Generator', parents=[parentParser])
+
+    parser.add_argument('interfaceFile',
+                        metavar='FILE',
+                        help='name of interface file')
+
+    parser.add_argument('--service-name',
+                        dest="serviceName",
+                        default='',
+                        help='optional service instance name; defaults to input file name')
+
+    parser.add_argument('--output-dir',
+                        dest="outputDir",
+                        default='',
+                        help='optional output directory for generated files')
+
+    parser.add_argument('--get-import-list',
+                        dest="getImportList",
+                        action='store_true',
+                        default=False,
+                        help='print out the list of imported files')
+
+    parser.add_argument('--import-dir',
+                        dest="importDirs",
+                        action="append",
+                        default=[],
+                        help='optional directory for imported files; may be given multiple times')
+
+    parser.add_argument('--hash',
+                        dest="hash",
+                        action='store_true',
+                        default=False,
+                        help='print md5 hash for interface; NO files are generated')
+
+    parser.add_argument('--dump',
+                        dest="dump",
+                        action='store_true',
+                        default=False,
+                        help='print info on parsed functions; NO files are generated')
+
+    parser.add_argument('--name-prefix',
+                        dest="namePrefix",
+                        default='',
+                        help='''optional prefix for generated files/functions/types;
+                        defaults to input filename''')
+
+    return parser
+
+def AddGeneratedFiles(parser, langPkg):
+    parser.add_argument('--gen-all',
+                        dest="gen_all",
+                        action='store_true',
+                        default=False,
+                        help='Generate all files')
+
+    for key, value in langPkg.GeneratedFiles.iteritems():
+        parser.add_argument('--gen-%s' % (key),
+                            dest="gen_%s" %(key.replace('-', '_')),
+                            action='store_true',
+                            default=False,
+                            help='Generate %s file' % (value % "API_NAME"))
+
+def ParseArguments(parser, argList):
+    # Parse the command lines arguments
+    args = parser.parse_args(argList)
+
+    # Get the base file name, without any extensions.
+    apiFileName = os.path.splitext( os.path.basename(args.interfaceFile) )[0]
+
+    args.apiFileName = apiFileName
+
+    # Use the default service instance name, if none is given.
+    if not args.serviceName:
+        args.serviceName = apiFileName
+
+    if not args.namePrefix:
+        args.namePrefix = apiFileName
+
+    # fix relative paths for all paths that aren't ''
+    args.importDirs = [ os.path.abspath(path) if path else path for path in args.importDirs ]
+    if args.outputDir:
+        args.outputDir = os.path.abspath(args.outputDir)
+
+    return args
+
+def AddImportsToSet(interface, importSet):
+    for key, value in interface.imports.iteritems():
+        AddImportsToSet(value, importSet)
+    importSet[interface.name] = interface
+
+def GetImports(interface):
+    """Recursively get all the interfaces an iterface depends on (including itself)"""
+    ImportSet=collections.OrderedDict()
+    for key, value in interface.imports.iteritems():
+        AddImportsToSet(value, ImportSet)
+
+    return ImportSet.values()
+
+def ImportLangPkg(lang):
+
+    # The name of the package directory has 'lang' prepended to the selected language name
+    langDir = 'lang' + lang
+
+    # Import the language package, and get the language specific libraries.
+    try:
+        langPkg = importlib.import_module(langDir)
+    except ImportError:
+        # Can't find the package to import
+        print >> sys.stderr, "ERROR: language '%s' not available" % langDir
+        sys.exit(1)
+
+    logging.info("Generating interface glue for language '%s'" % langDir)
+
+    return langPkg
+
+def CalcHash(interface):
+    """Calculate the hash, based on the hash text for the currently processd file, as well
+       as the imported files."""
+
+    # Add a interface version on to hash text to ensure when pack/unpack method changes all
+    # interfaces are considered changed.
+    if (os.environ.get('LE_CONFIG_RPC') == "y"):
+        hashText = "v4," + repr(interface)
+    else:
+        hashText = "v3," + repr(interface)
+
+    h = hashlib.md5()
+    h.update( hashText )
+    hashValue = h.hexdigest()
+
+    return hashValue, hashText
+
+
+def _TailAllTypes(interface, typeList, seenImports):
+    for typeName, typeItem in interface.types.iteritems():
+        typeList.append(typeItem)
+    for importName, importItem in interface.imports.iteritems():
+        if importName in seenImports:
+            break
+        seenImports.append(importName)
+        _TailAllTypes(importItem, typeList, seenImports)
+
+def AllTypes(interface):
+    typeList = []
+    _TailAllTypes(interface, typeList, [])
+    return typeList
+
+#
+# Main
+#
+def Main():
+    # Allow arguments to be specified through an environment variable. For example, this may be
+    # useful to set a specific logging level, especially if ifgen is executed from a build.
+    envOptions = os.environ.get('IFGEN_OPTIONS', '').split()
+    argList = sys.argv[1:] + envOptions
+
+    # Get the initial args, i.e. language choice, and logging/tracing
+    initialArgs, langParser = GetInitialArguments(argList)
+
+    # First handle logging/tracing args before anything else.
+    # Note that this will not affect the logging level or tracing for any module level code
+    # in this file or any other imported file, or any of the code above in this function.
+    if initialArgs.logLevel:
+        logging.getLogger().setLevel(LogLevelMapping[initialArgs.logLevel])
+
+    # Init the package for the chosen language
+    langPkg = ImportLangPkg(initialArgs.language)
+
+    # Create a parser with both language independent and language specific arguments,
+    # and parse the remaining arguments
+    parser = CreateArgumentParser(langParser)
+
+    langSpecificParser = parser.add_argument_group("%s language specific options"
+                                                   % (initialArgs.language))
+    AddGeneratedFiles(langSpecificParser, langPkg)
+    langPkg.AddLangArgumentGroup(langSpecificParser)
+
+    args = ParseArguments(parser, argList)
+    #print args
+
+    # Create a list of all the search directories
+    importDirs = [ os.path.split(args.interfaceFile)[0] ] + args.importDirs
+
+    # Parse the api file
+    interface = interfaceParser.ParseCode(args.interfaceFile, importDirs, args.namePrefix)
+
+    # Exit with error if we failed to parse the interface
+    if interface == None:
+        sys.exit(1)
+
+    # If we just want the import list, then print it out and exit
+    if args.getImportList:
+        importInterfaces = GetImports(interface)
+        print "\n".join([interface.path for interface in importInterfaces])
+        sys.exit(0)
+
+    # Calculate the hashValue, as it is always needed
+    hashValue, hashText = CalcHash(interface)
+
+    # Handle the --hash argument here.  No need to generate any code
+    if args.hash:
+        if args.dump:
+            # Print out the text used for generating the hash
+            print hashText
+        else:
+            print hashValue
+        sys.exit(0)
+
+    # Handle the --dump argument here.  No need to generate any code
+    if args.dump:
+        print interface
+        sys.exit(0)
+
+    # Set up the jinja2 environment
+    TemplateEnvironment = jinja2.Environment(
+        loader=jinja2.PackageLoader(langPkg.__name__),
+        extensions=['jinja2.ext.with_'],
+        autoescape=False
+    )
+
+    # Add global tests & filters
+    TemplateEnvironment.tests.update(
+        {
+          'BasicType':     ifgenJinjaExtensions.IsBasicType,
+          'EnumType':      ifgenJinjaExtensions.IsEnumType,
+          'BitMaskType':   ifgenJinjaExtensions.IsBitMaskType,
+          'HandlerType':   ifgenJinjaExtensions.IsHandlerType,
+          'ReferenceType': ifgenJinjaExtensions.IsReferenceType,
+          'StructType':    ifgenJinjaExtensions.IsStructType,
+          'HandlerReferenceType': ifgenJinjaExtensions.IsHandlerReferenceType,
+          'EventFunction': ifgenJinjaExtensions.IsEventFunction,
+          'HasCallbackFunction': ifgenJinjaExtensions.HasCallbackFunction,
+          'InParameter':   ifgenJinjaExtensions.IsInParameter,
+          'OutParameter':  ifgenJinjaExtensions.IsOutParameter,
+          'ArrayParameter': ifgenJinjaExtensions.IsArrayParameter,
+          'StringParameter': ifgenJinjaExtensions.IsStringParameter,
+          'ArrayMember':   ifgenJinjaExtensions.IsArrayMember,
+          'StringMember':  ifgenJinjaExtensions.IsStringMember,
+          'AddHandlerFunction': ifgenJinjaExtensions.IsAddHandlerFunction,
+          'RemoveHandlerFunction': ifgenJinjaExtensions.IsRemoveHandlerFunction })
+
+    TemplateEnvironment.globals.update({ 'any': ifgenJinjaExtensions.AnyFilter })
+
+    # Add any language-specific tests & filters
+    TemplateEnvironment.filters.update(langPkg.Filters)
+    TemplateEnvironment.tests.update(langPkg.Tests)
+    TemplateEnvironment.globals.update(langPkg.Globals)
+
+    allTypes = AllTypes(interface)
+
+    # Generate requested files from templates
+    for fileType, fileName in langPkg.GeneratedFiles.iteritems():
+        if args.gen_all or getattr(args, 'gen_%s' % ( fileType.replace('-', '_') )):
+            destPath = os.path.join(args.outputDir, fileName % args.namePrefix)
+            destDir = os.path.dirname(destPath)
+            if destDir and not os.path.exists(destDir):
+                os.makedirs(destDir)
+            Template = TemplateEnvironment.get_template(fileName % ('TEMPLATE'))
+            Template.stream(args=args,
+                            # Although we pass full args, break out a few commonly used arguments
+                            # with easier to use names.
+                            serviceName=args.serviceName,
+                            apiName=args.namePrefix,
+                            apiBaseName=args.apiFileName,
+                            idString=hashValue,
+                            messageSize=interface.getMessageSize(),
+                            # Break-out various aspects of the interface for convenience
+                            imports=interface.imports.keys(),
+                            types=interface.types.values(),
+                            allTypes=allTypes,
+                            definitions=interface.definitions.values(),
+                            functions=interface.functions.values(),
+                            events=interface.events.values(),
+                            fileComments=interface.comments,
+                            # But also provide the interface itself, in case it's needed
+                            interface=interface
+            ).dump(destPath, encoding='utf-8')
+
+#
+# Init
+#
+
+if __name__ == "__main__":
+    Main()

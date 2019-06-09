@@ -1,0 +1,220 @@
+/** @page toolsTarget_cm cm
+
+Use the Cellular Modem tool to control modem functions.
+
+@warning This tool has been designed to be used for development and testing purposes by a user in
+real time.  This tool should not be called from user apps, and may cause instabilities if called
+continuously.  @ref c_le_data should be used to open and configure connections within user apps.
+
+<h1>Usage</h1>
+
+<b><c> cm [SERVICES] [COMMANDS] </c></b>
+
+@section toolsTarget_cm_adc ADC
+
+@verbatim cm adc read channel @endverbatim
+> Read and print the value from an adc channel (where @c channel is one of the names returned).
+
+@section toolsTarget_cm_data Data
+
+@verbatim cm data
+cm data info @endverbatim
+> Get info on profile in use.
+
+@verbatim cm data profile <index> @endverbatim
+> Set profile in use.
+
+@verbatim cm data apn <apn> @endverbatim
+> Set apn for profile in use.
+
+@verbatim cm data pdp <pdp> @endverbatim
+> Set pdp type for profile in use.
+
+@verbatim cm data auth <none/pap/chap> <username> <password> @endverbatim
+> Set authentication for profile in use.
+
+@verbatim cm data connect <optional timeout (secs)> @endverbatim
+> Start a data connection.
+
+@verbatim cm data watch @endverbatim
+> Monitor the data connection.
+
+To start a data connection, ensure that your profile is configured correctly.
+Also ensure your modem is registered to the network. To verify, use <c>cm radio</c> and check @c Status.
+
+@todo With the evolution of DCS to handle several technologies (wifi, cellular, ...), <c> cm data </c>
+should be modified: it uses DCS to create a cellular data connection, but DCS is not dedicated to
+the cellular technology anymore.
+
+If you specify a time-out timer when starting a data connection, it will try to start a data
+connection until the timer expires.
+
+When starting a data connection, currently it only uses profile 1. Any configuration set for other
+profiles can't be used to start a data connection through the cm tool.
+
+@section toolsTarget_cm_info Info
+
+@verbatim cm info
+cm info all @endverbatim
+> Print all known info.
+
+@verbatim cm info device @endverbatim
+> Print the device model.
+
+@verbatim cm info imei @endverbatim
+> Print the IMEI.
+
+@verbatim cm info firmware @endverbatim
+> Print the firmware version.
+
+@verbatim cm info bootloader @endverbatim
+> Print the bootloader version.
+
+@section toolsTarget_cm_ips IPS
+
+@verbatim cm ips
+cm ips read @endverbatim
+> Print information about the power supply (voltage, power source, battery level).
+
+@verbatim cm ips thresholds @endverbatim
+> Print the input voltage thresholds.
+
+@section toolsTarget_cm_radio Radio
+
+@verbatim cm radio
+cm radio status @endverbatim
+> Get modem status.
+
+@verbatim cm radio <on/off> @endverbatim
+> Enable/disable radio.
+
+@verbatim cm radio rat <[CDMA] [GSM] [UMTS] [LTE] [TDSCDMA]> @endverbatim
+> Set the prefered radio access technologies.
+
+@verbatim cm radio getRAT @endverbatim
+> Get the prefered radio access technologies.
+
+@verbatim cm radio rat AUTO @endverbatim
+> Resume automatic RAT selection.
+
+After setting the radio access technology, you'll need to do a <c>legato restart</c> before it's effective.
+
+@section toolsTarget_cm_rtc RTC
+
+@verbatim cm rtc read @endverbatim
+> Reads the RTC time
+
+@verbatim cm rtc set "21 Oct 2015 16:29:00" @endverbatim
+> Sets the RTC time
+
+Time Format:
+- day of the month (leading zeros are permitted)
+- month (either the abbreviated or the full name)
+- year with century
+- hour (leading zeros are permitted)
+- minute (leading zeros are permitted)
+- seconds (leading zeros are permitted)
+
+
+@section toolsTarget_cm_sim SIM
+
+Regardless if security is enabled or not, the SIM card PIN code  must be entered for every operation.
+The only ways to change the PIN code are through @c changepin and @c unblock.
+
+@verbatim cm sim
+cm sim status @endverbatim
+> Get SIM status
+
+@verbatim cm sim info @endverbatim
+> Get SIM information.
+
+@verbatim cm sim imsi @endverbatim
+> Get the SIM imsi.
+
+@verbatim cm sim iccid @endverbatim
+> Get the SIM iccid.
+
+@verbatim cm sim number @endverbatim
+> Get the sim phone number. Often M2M SIM cards don't know their number (will return nothing).
+
+@verbatim cm sim mode <MANUAL | AUTO> @endverbatim
+> Set the SIM mode. Check @ref le_sim_AutomaticSelection for further details about automatic SIM
+> selection.
+
+@verbatim cm sim mode @endverbatim
+> Get the SIM current mode.
+
+@verbatim cm sim enterpin <pin> @endverbatim
+> Enter pin code that's required before any mobile equipment functionality can be used.
+
+@verbatim cm sim changepin <oldpin> <newpin> @endverbatim
+> Change the PIN code of the SIM card.
+
+@verbatim cm sim lock <pin> @endverbatim
+> Lock SIM: enables SIM card security, will request for a PIN code when inserted.
+
+@verbatim cm sim unlock <pin> @endverbatim
+> Unlock SIM: disables SIM card security, won't request a PIN code when inserted (unsafe).
+
+@verbatim cm sim unblock <puk> <newpin> @endverbatim
+> Unblocks the SIM card. The SIM card is blocked after X unsuccessful attempts to enter the PIN.
+
+@verbatim cm sim storepin <pin> @endverbatim
+> Stores PIN. Whether security is enabled or not, the SIM card has a PIN code that must be
+> entered for every operation. You can change the PIN code through @c changepin and @c unblock.
+
+@verbatim cm sim select <EMBEDDED | EXTERNAL_SLOT_1 | EXTERNAL_SLOT_2 | REMOTE> @endverbatim
+> Select the SIM type.
+
+Whether security is enabled or not, the SIM card has a PIN code that must be entered for every operations.
+Only ways to change this PIN code are through 'changepin' and 'unblock' operations.
+
+@section toolsTarget_cm_sms SMS
+
+@verbatim cm sms monitor @endverbatim
+> Monitor incoming SMS.
+
+@verbatim cm sms send <number> <content> @endverbatim
+> Send a text SMS.
+
+@verbatim cm sms sendbin <number> <file> <optional max sms> @endverbatim
+> Send a binary SMS
+
+Options:
+- <number>: Destination number
+- <content>: Content as text supported by GSM 03.38 alphabet
+- <file>: File path OR - for standard input (stdin)
+- <optional max sms>: (Optional) Limit for the number of SMS the file is split in
+
+@verbatim cm sms list @endverbatim
+> List all stored SMS
+
+@verbatim cm sms get <idx> @endverbatim
+> Get specific stored SMS.
+
+@verbatim cm sms clear @endverbatim
+> Clear stored SMS.
+
+@verbatim cm sms count @endverbatim
+> Count stored SMS.
+
+@section toolsTarget_cm_temp Temperature
+
+@verbatim cm temp
+cm temp all @endverbatim
+> Print all known temperatures.
+
+@verbatim cm temp thresholds @endverbatim
+> Print all thresholds.
+
+@verbatim cm temp radio @endverbatim
+> Print the radio temperature.
+
+@verbatim cm temp platform @endverbatim
+> Print the platform temperature.
+
+<HR>
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

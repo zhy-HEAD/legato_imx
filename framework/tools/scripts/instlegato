@@ -1,0 +1,73 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+if ! [ $LEGATO_ROOT ]; then echo "Run bin/legs first" >&2; exit 1; fi
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+# This script installs the system update pack from the $LEGATO_ROOT/build/$TARGET/ dir on the host.
+# This is really just a convenient wrapper around the 'update' tool.
+
+help_short_desc="install sample Legato system on target"
+
+help_usage=(
+"BUILD_DIR [DEST_IP]"
+)
+
+help_long_description=(
+"Once Legato has been built, $commandName can be used to install its"
+"sample 'system' on the target at the IP address specified by DEST_IP."
+"BUILD_DIR is the path to the directory to which Legato was built."
+""
+"If the target Legato directory is in the normal build location, i.e."
+"Inside \$LEGATO_ROOT/build, then you only need to specify the"
+"target platform, e.g. 'wp85', otherwise a full path is required."
+""
+"If DEST_IP is not specified on the command line, the DEST_IP"
+"environment variable will be used, if it is set."
+)
+
+BUILD_DIR=$1
+
+CheckForHelp $@
+
+# Check that the first argument exists and is a directory.
+# If not, try sticking "build/" on the front and see if that's a directory.
+if ! [ -d "$BUILD_DIR" ]
+then
+    BUILD_DIR_TRY2="build/$BUILD_DIR"
+    if ! [ -d "$BUILD_DIR_TRY2" ]
+    then
+        ExitWithError "First argument should be a directory." \
+            "Directory '$BUILD_DIR' not found." \
+            "Perhaps it needs to be built?"
+    else
+        BUILD_DIR="$BUILD_DIR_TRY2"
+    fi
+fi
+
+# Must make sure we are using install scripts that match the version of the framework that we
+# are installing, so override LEGATO_ROOT based on the BUILD_DIR
+LEGATO_ROOT="$BUILD_DIR/../.."
+if ! [ -f "$LEGATO_ROOT/version" ] || ! [ -f "$LEGATO_ROOT/README.md" ]
+then
+    ExitWithError "'$LEGATO_ROOT' does not appear to be a Legato framework directory."
+fi
+
+# If the second argument is provided, use that as the target device IP address.
+# Otherwise, use $DEST_IP, if set. Otherwise report an error.
+SetTargetIP $2
+
+SYSTEM_FILE=`ls "$BUILD_DIR"/system.*.update | grep -v signed`
+
+if ! [ -f "$SYSTEM_FILE" ]
+then
+    ExitWithError "System update pack '$SYSTEM_FILE' not found." \
+        "Are you sure '$BUILD_DIR' is a target-specific Legato build directory and" \
+        "the build has completed successfully?"
+fi
+
+echo "Installing Legato system update pack $SYSTEM_FILE"
+
+app install "$SYSTEM_FILE" $TARGET_IP

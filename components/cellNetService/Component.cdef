@@ -1,0 +1,32 @@
+provides:
+{
+    api:
+    {
+        le_cellnet.api
+    }
+}
+
+requires:
+{
+    api:
+    {
+        le_sim.api
+        le_mrc.api
+        le_secStore.api
+    }
+
+    component:
+    {
+        $LEGATO_ROOT/components/watchdogChain
+    }
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/watchdogChain
+}
+
+sources:
+{
+    cellNetServiceServer.c
+}

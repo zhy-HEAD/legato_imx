@@ -1,0 +1,14 @@
+sources:
+{
+    eCallWVoice.c
+}
+
+requires:
+{
+    api:
+    {
+        le_ecall.api
+        le_audio.api
+        le_mcc.api
+    }
+}

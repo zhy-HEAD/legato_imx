@@ -1,0 +1,16 @@
+executables:
+{
+    eCallTest = ( eCallTest )
+}
+
+start: manual
+
+bindings:
+{
+    eCallTest.eCallTest.le_ecall -> modemService.le_ecall
+}
+
+requires:
+{
+    configTree: { [r] system }
+}

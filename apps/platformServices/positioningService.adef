@@ -1,0 +1,41 @@
+sandboxed: false
+
+executables:
+{
+    posDaemon = ( $LEGATO_ROOT/components/positioning/posDaemon )
+}
+
+processes:
+{
+    run:
+    {
+        (posDaemon)
+    }
+
+    faultAction: restart
+    #if ${LE_CONFIG_SERVICES_WATCHDOG} = y
+        maxWatchdogTimeout: 120000
+    #else
+        watchdogTimeout: never
+    #endif
+}
+
+requires:
+{
+    configTree:
+    {
+        [w] .
+    }
+}
+
+bindings:
+{
+    posDaemon.watchdogChain.le_wdog -> <root>.le_wdog
+}
+
+extern:
+{
+    posDaemon.posDaemon.le_gnss
+    posDaemon.posDaemon.le_pos
+    posDaemon.posDaemon.le_posCtrl
+}

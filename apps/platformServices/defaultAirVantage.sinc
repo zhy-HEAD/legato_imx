@@ -1,0 +1,20 @@
+//
+// Include this file in the apps: section to include the default airVantage component for this
+// platform.
+//
+// Copyright (C) Sierra Wireless Inc.
+//
+
+apps:
+{
+    #if ${LE_CONFIG_APP_AVC_LEGACY} = y
+        ${LEGATO_ROOT}/apps/platformServices/airVantage/avcService
+    #elif ${LE_CONFIG_APP_AVC_LWM2MCORE} = y
+        ${LEGATO_ROOT}/apps/platformServices/airVantageConnector/avcService
+        #if ${LEGATO_TARGET} = wp750x
+            ${LEGATO_ROOT}/apps/platformServices/airVantage/avcCompat
+        #elif ${LEGATO_TARGET} = wp85
+            ${LEGATO_ROOT}/apps/platformServices/airVantage/avcCompat
+        #endif
+    #endif
+}

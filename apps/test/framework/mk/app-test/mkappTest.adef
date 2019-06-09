@@ -1,0 +1,72 @@
+// This is a comment.
+
+/* This is
+// a comment */
+
+ // this is a comment.
+
+bundles:
+{
+    file:
+    {
+        files/xyz  /usr/share/files/
+        files/xyz  /usr/share/files/abc
+//        files/     /
+//        files      /
+//        files/xyz/  /
+    [r] ${BUILD_DIR}/libexternal/libexternal.$TARGET.so  /lib/
+    }
+
+    dir:
+    {
+//        files/xyz  /usr/share/files/
+//        files/xyz  /usr/share/files/abc
+//          files/     /
+          files      /
+//          files/xyz/  /
+    [r] libexternal  /lib/
+    [x] bin  /bin
+    [r] lib  /lib
+    [r] otherlib /lib
+    }
+}
+
+executables:
+{
+    fromComponents = ( foo bar foo )
+}
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LOCATION = "stderr + syslog"
+    }
+
+    run:
+    {
+        proc1 = ( "fromComponents" 'foo' "'bar'" - '"jam"' "--crazy=12" "-c 9")
+        proc2 = ( /bin/fromComponents "foo /* bar - jam --crazy=12 -c 9" )
+        proc3 = ( fromComponents --crazy=12 )
+        (/bin/fromComponents)
+        proc4 = ( fromComponents foo
+     bar /* some random
+            comment mess */
+     - jam --crazy  // Three args on one line with a C++ comment.
+    )
+    }
+/**/
+    envVars:{  LE_LOG_LEVEL = DEBUG
+    FOO /****/=/**/BAR
+}}
+
+start: manual
+
+processes:
+{
+}
+
+components:
+{
+    scripts
+}

@@ -1,0 +1,51 @@
+executables:
+{
+    // Component "greetClient" requires api "hello".
+    // Component "greetServer" provides api "hello".
+
+    // Component "magicClient" requires api "magic".
+    // Component "magicServer" provides api "magic".
+
+    // Client-only executables
+    hello = (greetClient)
+    helloInternal = (greetClient)
+    magic = (magicClient)
+    magicHello = (magicClient greetClient )
+
+    // Server-only executables
+    internalGreetServer = (greetServer)
+}
+
+processes:
+{
+    run:
+    {
+        (hello)
+        (helloInternal)
+        (magic)
+        (magicHello)
+
+        (internalGreetServer "I love myself!")
+    }
+}
+
+bindings:
+{
+    // Connect helloInternal to the internal greet server.
+    helloInternal.greetClient.hello -> internalGreetServer.greetServer.hello
+
+    // Connect magicHello's "hello" client-side interface to the internal greet server.
+    magicHello.greetClient.hello -> internalGreetServer.greetServer.hello
+}
+
+extern:
+{
+//      magic = magicHello.magicClient.magic
+}
+
+bindings:
+{
+    hello.greetClient.hello -> server.hello
+    magic.magicClient.magic -> server.magic
+    magicHello.magicClient.magic -> server.magic
+}

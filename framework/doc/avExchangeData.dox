@@ -1,0 +1,485 @@
+/** @page avExchangeData Exchange Data
+
+This topic describes how to develop a Legato App that sends data to the AirVantage Server through
+the avcService.
+This tutorial explains by example how you would
+- transmit data to the AirVantage Server (push)
+- read the App configuration from the AirVantage Server (variable [r])
+- write settings from AirVantage to the sample app (setting [rw])
+- send commands from AirVantage to the sample app (command [x])
+
+The underlying protocol and security stacks are provided by Legato so developers can focus on
+gathering data from sensors without worrying about security.  To connect to the AirVantage Server
+the @c avcService (and dependent services) must be running on your target.
+
+Steps to develop a Legato App that exchanges data with AirVantage:
+
+@c 1. @ref avExchangeData_define "Develop and Install the App". <br>
+@c 2. @ref avExchangeData_implementLegatoApp "Develop and Install Legato app". <br>
+@c 3. @ref avExchangeData_implementLegatoApp <br>
+@c 4. @ref avExchangeData_exchData "Exchange data" between the target device and
+AirVantage.
+
+@section avExchangeData_pre Prerequisites
+
+This tutorial was designed on a mangOh and uses the following hardware:
+- [AirPrime WP8548 module]
+(https://www.sierrawireless.com/products-and-solutions/embedded-solutions/iot-modules/)
+- [mangOH board](http://mangoh.io/)
+- [Power adapter 12Vdc 1.5A](http://fr.rs-online.com/web/p/alimentations-enfichables/7212203/)
+- [USB-to-Serial cable](http://www.aten.com/products/productItem.php?model_no=UC232A)
+
+If you have not set up your target device yet, it is highly recommended that you visit
+[mangOH.io](http://mangoh.io/) and walk through their getting started tutorials before continuing on
+with this tutorial.
+
+This tutorial references the following APIs:
+- @ref c_le_avdata API (le_avdata.api)
+
+@section avExchangeData_define Data Create the App
+
+This section covers how to define App data and configure variables, settings, and commands.
+
+First, define a scenario to implement and describe the data to be exchanged. Once this has been
+designed it needs to be implemented inside the main source code of your App.
+
+@subsection avExchangeData_defineData_one One Room Scenario
+
+This sample shows how to use AirVantage to automate remote monitoring and control of scenario for
+simple room temperature:
+
+In this model, one Room has 3 variables that can be read (no write access) by AirVantage:
+- Room name
+- Current temperature
+- Current AC switch (on/off) state
+
+The Room also has 1 target temperature setting that a user can remotely get/set (read/write) from
+AirVantage.
+
+The Room also has an AC switch which can be turned off via an AirVantage command, if the user wishes
+to turn on the AC they need to do this by setting the target temperature.
+
+The variables, setting and commands are defined as Linux path, which can be stored in the macro
+definition.
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c AssetDataPath
+
+@section avExchangeData_implementLegatoApp Implement Legato App
+
+This section covers how to:
+- get Legato @ref avExchangeData_implementLegatoApp_sampleCode from GitHub
+- @ref avExchangeData_implementLegatoApp_useAPIs.
+- @ref avExchangeData_implementLegatoApp_varSettings "Declare variables".
+- @ref avExchangeData_implementLegatoApp_initApp.
+- @ref avExchangeData_implementLegatoApp_compileInstall App
+
+@subsection avExchangeData_implementLegatoApp_sampleCode Sample Source Code
+Download the
+[sample app source code](https://github.com/legatoproject/legato-af/tree/master/apps/sample/assetData)
+from GitHub.
+
+Before data exchange can start with AirVantage, a LWM2M session must be established, this is taken
+care of by the sample app.
+
+Start an AVC Session:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c StartAVCSession
+
+@subsection avExchangeData_implementLegatoApp_useAPIs Use Legato APIs
+
+@ref c_le_avdata API (le_avdata.api) contains functions to create a LWM2M session as well as
+sending and receiving data with AirVantage.
+
+In the <b>component definition</b> file @c component.cdef:
+@code
+requires:
+{
+    api:
+    {
+        le_avdata.api
+    }
+}
+@endcode
+
+In the <b>app definition file</b>, @c assetData.adef:
+
+@code
+bindings:
+{
+    assetData.componentAssetData.le_avdata -> avcService.le_avdata
+}
+@endcode
+
+The make file contains the following commands to create the assetData App:
+
+In the @b Makefile:
+@code
+mkapp -v -t $@ assetData.adef
+@endcode
+
+The main code handling the app data exchange with AirVantage is in @c main.c
+
+@subsection avExchangeData_implementLegatoApp_varSettings Declare Variables
+
+Let's declare the following as global:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c DeclareVariables
+
+@subsection avExchangeData_implementLegatoApp_initApp Initialize App
+
+The @c COMPONENT_INIT is called @b once by the Legato framework when the App starts.
+This is where your component's initialization code goes.
+
+@c COMPONENT_INIT must return to the framework. App logic tasks are implemented outside of this
+function using event-handlers: an event-driven model App.
+
+@subsubsection avExchangeData_implementLegatoApp_COMPONENT_INIT COMPONENT_INIT
+
+We'll do the following initializations in COMPONENT_INIT:
+
+<b>Register an AirVantage Controller (AVC) handler</b> function, by calling
+le_avdata_AddSessionStateHandler() function. Only a registered control App can call
+le_avdata_RequestSession().
+
+<b>Call</b> le_avdata_RequestSession() to start an AVC Session with AirVantage.
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c StartAVCSession
+
+<b>Create a timer to close the AVC session</b> and exit app, in 10 min:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c CreateTimer
+
+<b>Create an instances of Room Asset</b>, by calling le_avdata_CreateResource()
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c CreateResources
+
+<b>Assign default values</b> to the room asset variables (declared as global variables):
+
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c AssignValues
+
+<b>Register handler</b>, in order to apply Settings and Commands sent by AirVantage.
+For each data field (settings and commands), call le_avdata_AddResourceEventHandler()
+to register handler functions that will be called by the framework whenever the field is altered by
+AirVantage:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c RegisterHandler
+
+<b>Create a timer to update the room temperature values</b> every 20 seconds:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c SetTimer
+
+<b>Create a timer to push the values</b> to the server every 10 seconds:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c PushTimer
+
+@subsubsection avExchangeData_implementLegatoApp_VariableHandlers Variable Handler Functions
+
+This App has a variable handler function for @c ROOM_TEMP_READING_VAR_RES to count the number of
+server reads of the room temperature.
+
+The function must be registered in @c COMPONENT_INIT with le_avdata_AddResourceEventHandler().
+
+Let’s name it ReadTempVarHandler:
+@code
+static void ReadTempVarHandler(const char* path,le_avdata_AccessType_t accessType,le_avdata_ArgumentListRef_t argumentList,void* contextPtr)
+@endcode
+
+This function is called by the @c avcServce whenever AirVantage wants to read the room temperature:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c VariableDataHandler
+
+@subsubsection avExchangeData_implementLegatoApp_setHandlers Setting Handler Functions
+
+Our app needs to implement handler functions to retrieve the value of a Setting
+(@c TargetTemperature) set by AirVantage. It also counts the number of times the server has
+retrieved the value.
+
+
+This function must be registered in COMPONENT_INIT with le_avdata_AddResourceEventHandler().
+
+Let's name it TempSettingHandler, define a function that can be called by the avcService whenever
+AirVantage Server receives a request to change the path:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c TempSettingHandler
+
+To retrieve the value pushed by AirVantage, call le_avdata_GetInt() | le_avdata_GetFloat()
+| le_avdata_GetBool() | le_avdata_GetString().
+
+Example:
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c DataHandlerFunction
+
+@subsubsection avExchangeData_implementLegatoApp_cmdHandlers Command Handler Functions
+
+Our App needs to implement handler function to Execute the Command (@c AC_CMD_TURN_OFF_RES) set by
+AirVantage. The App also changes IS_AC_ON_VAR_RES to false.
+
+This function must be registered in COMPONENT_INIT with le_avdata_AddResourceEventHandler().
+
+Let's name it ExecACCtrlCmd:
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c VariableExectACCtrlCmd
+
+This function will be called by the @c avcService whenever AirVantage wants to execute the
+@c ExecACCtrlCmd command on @c AC_CMD_TURN_OFF_RES.
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c FunctionExectACCtrlCmd
+
+
+@subsubsection avExchangeData_implementLegatoApp_avcHandler AVC Handler Functions
+
+The @c avcStatusHandler function has been registered in the COMPONENT_INIT function by using
+@c le_avdata_AddSessionStateHandler(); this is required to start LWM2M session with AirVantage. For this
+tutorial the variable: @c updateStatus is compared with the AVC Status.
+
+@subsection avExchangeData_implementLegatoApp_pushHandler Push Data from Target to AirVantage
+
+The PushResources function will push the Resources to the AirVantage Cloud at regular intervals
+(defined by the timer).  Once data is pushed to AirVantage you can log into the UI and view the
+resources.
+
+@snippet ../../apps/sample/assetData/assetDataComponent/main.c PushCallbackHandler
+
+Once the app is installed and running on your target, you should be able to see the resources in the
+AirVantage UI:
+
+Location: "Monitor", "System", Click on your target device, Click "Timeline"
+
+You will then see a list of communication that has been done between AirVantage and your Target.
+
+Click on the "LWM2M" object to see the details.
+
+@image html avExchangeData-resources.png
+
+@subsubsection avExchangeData_implementLegatoApp_exitApp Exit App
+
+The handler @c timerExpiredHandler is called by the avcService 10min later, as set in
+@c COMPONENT_INIT. This function closes LWM2M session and Quits the App.
+
+@subsection avExchangeData_implementLegatoApp_compileInstall Compile and Install
+
+Next, you have to compile your App and install it on the target device.
+
+Compile the source code from @c assetData main folder and install the App on the target
+device.
+
+Our example uses a mangOH board with an embedded WP8548 module so the compiler target will be
+@c wp85. If you're using a different target module, change the compiler target as needed
+(e.g., ar7, wp7 or ar86).
+
+Run @c bin/legs and @c cd to the directory for the @c assetData sample App.
+
+@verbatim
+$ bin/legs
+$ cd $LEGATO_ROOT/apps/sample/assetData
+@endverbatim
+
+Next use @make to build the sample App for your target.
+
+@verbatim
+$ make wp85
+@endverbatim
+
+After @c make completes, a software package will be generated: @c assetData.wp85.update
+Use the @ref toolsHost_update tool to transfer the App to your target.
+
+@verbatim
+$ update assetData.wp85.update <device_ip_address>
+@endverbatim
+
+We're now ready to started the App and "Exchange Data" with the AirVantage Server.
+
+Open Logging and Start the app:
+
+Open 2 terminals to the target by @code ssh root@192.168.2.2 @endcode
+
+In the 1st terminal (to continuously view the logs):
+@verbatim
+# logread -f | grep "assetdata"
+@endverbatim
+
+In the 2nd terminal (to start the app):
+@verbatim
+# app status   # check that assetData is listed
+# app start assetData
+@endverbatim
+
+In the 1st terminal you should see logging statements like:
+@verbatim
+# logread -f | grep "Legato AssetData: "
+Jul 28 22:59:52 swi-mdm9x15 user.info Legato:  INFO | assetData[18578]/assetDataComponent T=main | main.c _assetDataComponent_COMPONENT_INIT() 297 | Legato AssetData: Start Legato AssetDataApp
+Jul 28 22:59:52 swi-mdm9x15 user.info Legato:  INFO | assetData[18578]/assetDataComponent T=main | main.c _assetDataComponent_COMPONENT_INIT() 304 | Legato AssetData: AirVantage Connection Controller started.
+Jul 28 22:59:52 swi-mdm9x15 user.info Legato:  INFO | assetData[18578]/assetDataComponent T=main | main.c _assetDataComponent_COMPONENT_INIT() 313 | Legato AssetData: Started LWM2M session with AirVantage
+Jul 28 22:59:52 swi-mdm9x15 user.info Legato:  INFO | assetData[18578]/assetDataComponent T=main | main.c _assetDataComponent_COMPONENT_INIT() 323 | Legato AssetData: Create instances AssetData
+Jul 28 22:59:52 swi-mdm9x15 user.info Legato:  INFO | assetData[18578]/assetDataComponent T=main | main.c _assetDataComponent_COMPONENT_INIT() 342 | Legato AssetData: Register handler of instances
+Jul 28 22:59:52 swi-mdm9x15 user.info Legato:  INFO | assetData[18578]/assetDataComponent T=main | main.c avcStatusHandler() 277 | Legato AssetData: AirVantage agent reported update status: CONNECTION_REQUIRED
+@endverbatim
+
+@section avExchangeData_exchData Exchange Data with AirVantage
+
+The LightWeight M2M protocol default behavior initiates communication to the server through the
+target device. Once a connection between the server and the device is established, the server can
+send any request to the device: read or write a data, execute a command, apply a firmware upgrade,
+install an app, etc.
+
+@image html lwm2m_communication.png
+
+When a device is in the field:
+- On the first boot, it starts to communicate with the bootstrap server to collect credentials and
+the AirVantage URL. It will only do this if AirVantage denies the connection or at a regular
+interval to change the security keys (steps 1 and 2).
+- Then the device initiates a communication with AirVantage, updates the objects list (step 3).
+- AirVantage sends the pending requests to the device (step 4).
+- The device executes the requests.
+- The device communicates the acknowledgments and close the connection.
+
+@subsection avExchangeData_exchData_pushData Push Data
+If you need to collect data as soon as the device is ready to communicate with AirVantage, and at
+high frequency, use le_avdata_Push(). When a new value is obtained from the sensor, the value is
+pushed to Legato. The target device sends the data automatically without a new request from
+AirVantage.
+
+@section avExchangeData_avAPI Testing Asset Data App Results
+
+AirVantage provides REST APIs to communicate with the AirVantage Server and interact with the
+variables, settings and commands.  See
+[AirVantage Web Services Documentation](https://source.sierrawireless.com/airvantage/av/reference/cloud/API/)
+for the API documentation used to communicate with the AirVantage Server.
+
+This tutorial will walk you through setting up a connection to AirVantage using the REST APIs with
+@c curl library (installed when you set up Legato AF on your dev machine) to test out the Asset Data
+App that we just walked you through. You are welcome to use any REST API app to test.
+
+@subsection avExchangeData_avAPI_Authenticate Request Access Token
+
+Before you can send any requests you must first request an Authentication Token from the AirVantage
+Server.
+
+@c 1. Log in to the AirVantage Web UI: [Europe](https://eu.airvantage.net).
+
+@c 2. Click on "Develop", "API clients"
+
+@c 3. Click "Create".  Walk through the wizard and provide the required information. This will
+generate a client ID and secret key that you need to use with all your subsequent requests.
+
+
+Once you've gotten the client ID and secret key you will need to make a request to AirVantage to
+obtain an access token.
+
+@verbatim
+server="https://eu.airvantage.net"
+login="<AirVantage login>"
+password="<AirVantage password>"
+client_id="<client ID obtained from the step above>"
+client_secret="<secret key obtained from step above>"
+
+curl -s "${server}/api/oauth/token?grant_type=password&username=${login}&password=${password}&client_id=${client_id}&client_secret=${client_secret}"
+@endverbatim
+
+The response should looks like this:
+
+@verbatim
+{
+  "access_token": "fe47d528-7414-4962-a7e6-ee6b82491f7a",      # copy the access token
+  "refresh_token": "9b465388-c9e2-45d3-98d0-1a44a503ec40",
+  "expires_in": 43199,
+}
+@endverbatim
+
+The access token will allow further authorization of other requests to the AirVantage Web Services
+API and will need to be used in subsequent requests.  If the token expires it must be requested
+again before further calls can be made.
+
+@subsection avExchangeData_avAPI_UID Obtain the UID of your target
+
+You will also need to include the UID of your target into the requests made to the AirVantage Web
+Services.
+
+To obtain your UID:
+
+@c 1. Log in to the AirVantage Web UI: [Europe](https://eu.airvantage.net)
+
+
+@c 2. Click "Monitor", then "Systems" and select your system
+
+@c 3. The URL should contain the UID of your system
+(e.g., https://eu.airvantage.net/monitor/systems/systemDetails?uid=xxxx )
+
+@subsection avExchangeData_avAPI_Read Request Data
+
+Now that you have your Access Token and UID you can now send requests to the AirVantage Server to
+request data with a Read request.
+
+Example read request:
+@verbatim
+server="https://eu.airvantage.net"
+access_token="<access token>"                     # refer to the step above to get your access token
+uid="<UID>"                                       # refer to the step above to get uid
+resource="assetData.home.room1.AC.IsACOn"         # resource we want to read from the device
+
+
+curl -X POST -s "${server}/api/v1/operations/systems/data/retrieve?&access_token=${access_token}" -H 'Content-Type: application/json' -d "{\"systems\":{\"uids\":[\"${uid}\"]}, \"data\":[\"${resource}\"]}"
+@endverbatim
+
+In the AirVantage UI you should be able to see the read data:
+
+Location: "Monitor", "System", Click on your target device, Click "Timeline"
+
+You will then see a list of communication that has been done between AirVantage and your Target.
+
+Click on the "Retrieve System Data" object to see the details.
+
+@image html avExchangeData-Read2.png
+
+@subsection avExchangeData_avAPI_Write Apply Settings
+
+You can now send requests to the AirVantage Server to apply settings with a write request.
+
+Example write request:
+@verbatim
+server="https://eu.airvantage.net"
+access_token="<access token>"                              # refer to the step above to get your access token
+uid="<UID>"                                                # refer to the step above to get uid
+resource="assetData.home1.room1.thermostat.targetTemp"     # resource we want to write to
+value="100"                                                # the value we want to write to the resource
+
+curl -X POST -s "${server}/api/v1/operations/systems/settings?&access_token=${access_token}" -H 'Content-Type: application/json' -d "{\"reboot\":false,\"systems\":{\"uids\":[\"${uid}\"]}, \"settings\":[{\"key\":\"${resource}\", \"value\": \" ${value} \" }]}"
+@endverbatim
+
+In the AirVantage UI you should be able to see the read data:
+
+Location: "Monitor", "System", Click on your target device, Click "Timeline"
+
+You will then see a list of communication that has been done between AirVantage and your Target.
+
+Click on the "Apply Setting" object to see the details.
+
+@image html avExchangeData-Write2.png
+
+@subsection avExchangeData_avAPI_Command Send a Command
+
+You can now send requests to the AirVantage Server to perform a command with a command request.
+
+Example command request:
+@verbatim
+server="https://eu.airvantage.net"
+access_token="<access token>"                              # refer to the step above to get your access token
+uid="<UID>"                                                # refer to the step above to get uid
+resource="assetData.home1.room1.AC.ACControl"              # resource we want to send a command to
+
+curl -X POST -s "${server}/api/v1/operations/systems/command?&access_token=${access_token}" -H 'Content-Type: application/json' -d "{\"systems\":{\"uids\":[\"${uid}\"]}, \"commandId\":\"${resource}\"}"
+@endverbatim
+
+In the AirVantage UI you should be able to see the read data:
+
+Location: "Monitor", "System", Click on your target device, Click "Timeline"
+
+You will then see a list of communication that has been done between AirVantage and your Target.
+
+Click on the "Send Command" object to see the details.
+
+@image html avExchangeData-Command.png
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

@@ -1,0 +1,33 @@
+/**
+ * @page c_ecallApp eCallDemo Application
+ *
+ * @ref ecallApp_interface.h "API Reference"
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file ecallApp_interface.h
+ *
+ * Legato @ref c_ecallApp include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Retrieve the eCall app settings and start a test eCall Session.
+ *
+ * @note On failure, the process exits, so you don't have to worry about checking any returned
+ *       error codes.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION StartSession
+(
+    uint32  paxCount  IN ///< number of passengers
+);

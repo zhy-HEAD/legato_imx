@@ -1,0 +1,13 @@
+sources:
+{
+    le_mccTest.c
+}
+
+requires:
+{
+    api:
+    {
+        le_mcc.api
+        le_audio.api [types-only]
+    }
+}

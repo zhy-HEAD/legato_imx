@@ -1,0 +1,316 @@
+/** @page apiFilesSyntax Syntax
+
+Legato API files support defining functions, events, handlers as well as custom user-defined types.
+
+@ref apiFilesSyntax_function "Functions" are similar to C functions.
+They take input and output parameters, and return a result.
+
+The API file currently supports:
+- pre-defined types
+- user-defined types
+
+@section apiFilesSyntax_types Type Support
+
+@second Pre-defined Types:
+
+@verbatim
+uint8
+uint16
+uint32
+uint64
+
+int8
+int16
+int32
+int64
+
+double
+
+string
+
+bool
+
+file
+
+handler (deprecated; use the name of the handler instead)
+
+le_result_t
+le_onoff_t
+@endverbatim
+
+The @c uint and @c int types are basic data integer types.
+
+The @c double type is an 8 byte floating-point data type.
+
+The @c string type is a data type used to store text.
+
+The @c bool type is a data type used to store boolean values (true, false).
+
+The @c file type is used to pass an open file descriptor as a parameter between a client and server.
+
+The @ref le_result_t and @ref le_onoff_t types from legato.h can also be used in API files.
+
+@second User-defined types:
+
+ - DEFINE
+ - ENUM
+ - BITMAP
+ - REFERENCE
+ - HANDLER
+ - STRUCT
+
+Type definitions can also be shared between API files with USETYPES.
+
+
+@subsection apiFilesSyntax_typesDefine DEFINE
+
+A DEFINE is specified as:
+
+@code
+DEFINE <name> = <value>;
+@endcode
+
+The @c value can be a string or an expression evaluated to a numeric value (when the definition is
+read).
+
+
+@subsection apiFilesSyntax_typesEnum ENUM
+
+An ENUM is specified as:
+
+@verbatim
+ENUM <name>
+{
+    [<elementList>]
+};
+@endverbatim
+
+The @c elementList is a comma separated list of elements.  The elements should all be uppper-case.
+Element values assigned are internally generated. Element values can also be assigned explicitly as
+below:
+
+@verbatim
+ENUM <name>
+{
+    <element1> = 1,
+    <element2>,
+    <element3>
+};
+@endverbatim
+
+@subsection apiFilesSyntax_typesBitmask BITMASK
+
+A BITMASK is a special type of ENUM.  It is specified the same way as an ENUM, but the internally
+generated element values are bit positions, i.e. 0x1, 0x2, 0x4, etc.
+
+
+@subsection apiFilesSyntax_typesReference REFERENCE
+
+A REFERENCE is specified as:
+
+@verbatim
+REFERENCE <name>;
+@endverbatim
+
+The REFERENCE is used to define a reference to an object. The object reference is mapped to an
+opaque reference in C and an object instance or similar in other languages.
+
+@subsection apiFilesSyntax_typesStruct STRUCT
+
+A STRUCT is specified as:
+
+@verbatim
+STRUCT <name>
+{
+    <type> <name>;                ///< Simple structure member
+    string <name>[<maxSize>];     ///< String structure member
+    <type> <name>[<maxSize>];     ///< Array structure member
+    ...
+};
+@endverbatim
+
+A structure is used to define a collection of data, similar to a C struct.  A STRUCT can contain
+members of any type, including strings, arrays, and other STRUCTs.
+
+When structured data is passed over an API call, the entire structure is passed every time.
+For smaller structures this overhead can be minimal.  For larger objects it's better to return a
+reference to the object using the REFERENCE type and use accessor functions to get the properties
+of the object.
+
+@subsection apiFilesSyntax_typesHandler HANDLER
+
+A HANDLER is specified as:
+
+@verbatim
+HANDLER <handlerType>
+(
+     [<parameterList>]
+);
+@endverbatim
+
+The @c parameterList can contain one or more parameters separated by commas, or can be empty
+if there are no parameters.
+It can only contain scalar types or string types, as described in
+@ref apiFilesSyntax_function.
+All the parameters should be IN parameters.
+
+See @ref apiFilesC_handler for details on the C code generated from the above handler
+definition.
+
+@subsection apiFilesSyntax_typesUsetypes USETYPES
+
+You can share type definitions between .api files with USETYPES. This is commonly referred to as
+importing, although only the type definitions are imported or used. Any code related definitions in
+a .api file, e.g. FUNCTION, are ignored.  These USETYPES can even be nested.
+
+@note It is not necessary to include the @c .api extension when importing.
+I.e. @verbatim USETYPES defn; @endverbatim is equivalent to
+@verbatim USETYPES defn.api; @endverbatim
+
+As an example of usage, suppose the files defn.api, common.api and example.api are defined as
+follows:
+
+defn.api
+@verbatim
+DEFINE FIVE = 5;
+@endverbatim
+
+common.api
+@verbatim
+USETYPES defn.api;
+
+DEFINE TEN = defn.FIVE + 5;
+@endverbatim
+
+example.api
+@verbatim
+USETYPES common.api;
+
+DEFINE twenty = common.TEN + defn.FIVE + 5;
+@endverbatim
+
+This example illustrates that nesting causes an implicit USETYPES.  Thus, any definitions from
+defn.api, can be used in example.api, in the same way as if it had explicitly imported defn.api.
+
+
+@section apiFilesSyntax_function Specifying a Function
+
+A function is specified as:
+
+@verbatim
+FUNCTION [<returnType>] <name>
+(
+    [<parameterList>]
+);
+@endverbatim
+
+The @c parameterList can contain one or more parameters separated by commas, or can be empty
+if there are no parameters.  These parameters types are supported:
+
+@code <type> <name> [ ( "IN" | "OUT" ) ] @endcode
+     - scalar type
+     - defaults to IN if a direction is not specified
+
+
+@code <type> <name> "[" <maxSize> "]" "IN" @endcode
+     - an IN array
+     - @c maxSize specifies the maximum number of elements allowed for the array
+     - optional @c minSize specifies the minimum number of elements required for the array
+
+@deprecated [ <minSize> ".." ] is now deprecated.  Only <maxSize> needs to be specified.
+
+@code <type> <name> "[" <maxSize> "]" "OUT" @endcode
+     - an OUT array
+     - array should be large enough to store @c maxSize of elements; if supported by the
+       function implementation, a shorter OUT array can be used.
+
+
+@code "string" <name> "[" <maxSize> "]" "IN" @endcode
+     - an IN string
+     - @c maxSize specifies the maximum string length allowed,
+     - string length is given as number of characters, excluding any terminating characters
+
+@deprecated [ <minSize> ".." ] is now deprecated.  Only <maxSize> needs to be specified.
+
+@code "string" <name> "[" <maxSize> "]" "OUT" @endcode
+     - an OUT string
+     - string should be large enough to store @c maxSize characters; if supported by the
+       function implementation, a shorter OUT string can be used.
+     - string length is given as number of characters, excluding any terminating characters
+
+@code <handlerType> <name> @endcode
+     - a handler (callback) function.
+     - see @ref apiFilesSyntax_handler for info on how to declare a handler.
+
+The @c returnType is optional, and if specified, can be any type that's not an array, string,
+or handler.
+
+@warning Make sure that the function's @c maxSize is appropriately defined. If the client sends a
+value that larger then the @c <maxSize>, an error will be written to the log
+@c ((strlen(<name>) | <name>Size) > <maxSize>) and the client will be terminated.
+
+@section apiFilesSyntax_event Specifying an Event
+
+Do this to specify an event:
+
+@verbatim
+EVENT <eventType>
+(
+    <parameterList>
+);
+@endverbatim
+
+The @c parameterList can contain one or more parameters separated by commas.
+It can contain anything that's valid for a function, but it must contain one handler parameter.
+The parameters are used when registering a handler for the specified event.
+
+See @ref apiFilesC_event for details on the C code generated from the above event
+definition.
+
+
+@section apiFilesSyntax_comments Comments
+
+The API file supports both C and C++ comment styles.  Comments that use the doxygen formats
+@verbatim /** @endverbatim to start a multi-line comment or @verbatim ///< @endverbatim
+to start a one line comment receive special processing.  Multi-line comments at the start of the
+API file will be copied directly to the start of the appropriate generated files.
+
+Comments given in the function definition will be copied to the appropriate generated files
+under the following conditions:
+ - Multi-line comments must start with @verbatim /** @endverbatim
+ - Single-line comments must start with @verbatim ///< @endverbatim
+ - In a block of single-line comments, each line must start with @verbatim ///< @endverbatim
+   rather than just the first line.  This is different from typical doxygen usage.
+ - If the function definition is preceded by a multi-line comment then this comment will be
+   copied to the appropriate generated files.
+ - If any parameter is followed by a multi-line comment or one or more single line comments,
+   then all these comments will be copied to the appropriate generated files.
+
+If an event or handler definition is preceded by a multi-line comment, then this comment will be
+copied to the appropriate generated files, under the same conditions as function definitions.
+
+Any comments provided after an element in an ENUM or BITMASK, will be copied to the appropriate
+generated files, under the same conditions as function parameter comments.
+
+
+@section apiFilesSyntax_sample Sample API
+
+Here's the @c defn.api file containing just type definitions
+
+@verbinclude defn.api
+
+Here's the @c common.api file containing just type definitions, and using the types defined
+in @c defn.api
+
+@verbinclude common.api
+
+Here's the @c example.api file containing various definitions, and using the types defined
+in @c defn.api and @c common.api
+
+@verbinclude example.api
+
+<HR>
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

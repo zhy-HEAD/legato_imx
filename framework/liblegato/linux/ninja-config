@@ -1,0 +1,50 @@
+# --------------------------------------------------------------------------------------------------
+# Ninja build script configuration for linux
+#
+# Copyright (C) Sierra Wireless Inc.
+# --------------------------------------------------------------------------------------------------
+
+if [ "$LEGATO_TARGET" != "localhost" ]; then
+    CFLAGS="$CFLAGS -DLEGATO_EMBEDDED"
+fi
+
+if [ -n "$TARGET_SYSROOT" ]
+then
+    CC="$CC --sysroot=$TARGET_SYSROOT"
+    AR="$AR"
+fi
+
+# Set position-independent code
+CFLAGS="$CFLAGS -fPIC -I${LEGATO_ROOT}/framework/daemons/linux"
+
+# enable coverage.flags
+if [ "${LE_CONFIG_TEST_COVERAGE}" == "y" ]
+then
+    CFLAGS="$CFLAGS --coverage"
+    NINJA_LDFLAGS="$NINJA_LDFLAGS --coverage"
+    TEST_COVERAGE_DIR="${LE_CONFIG_TEST_COVERAGE_DIR}"
+
+    if [ -n "$TEST_COVERAGE_DIR" ]
+    then
+        CFLAGS="$CFLAGS -fprofile-dir=$TEST_COVERAGE_DIR"
+    fi
+fi
+
+if [ "${LE_CONFIG_STRIP_STAGING_TREE}" = y ]; then
+    CFLAGS="$CFLAGS -g"
+    NINJA_LDFLAGS="$NINJA_LDFLAGS -g"
+fi
+
+if [ "${LE_CONFIG_DEBUG}" = y ]; then
+    # If not stripping the staging tree, add debug for the debug build.
+    # If stripping the staging tree this isn't needed as debug is always generated
+    # as a separate file on the host.
+    if [ $(LE_CONFIG_STRIP_STAGING_TREE) != y ]; then
+        CFLAGS="$CFLAGS -g"
+    fi
+else
+    # Enable optimization flags
+    CFLAGS="$CFLAGS -O2 -fno-omit-frame-pointer"
+fi
+
+LIBLEGATO_SHARED=y

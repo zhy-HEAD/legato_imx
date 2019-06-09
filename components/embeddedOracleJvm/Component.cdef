@@ -1,0 +1,17 @@
+
+bundles:
+{
+    dir:
+    {
+        [x] "${LE_CONFIG_EJDK_DIR}/bin" "/"
+        [r] "${LE_CONFIG_EJDK_DIR}/lib" "/"
+    }
+}
+
+requires:
+{
+    component:
+    {
+        jvmShared
+    }
+}

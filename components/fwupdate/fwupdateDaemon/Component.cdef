@@ -1,0 +1,37 @@
+
+provides:
+{
+    api:
+    {
+        le_fwupdate.api
+        le_dualsys.api
+        le_flash.api
+    }
+}
+
+sources:
+{
+    fwupdateServer.c
+    le_dualsys.c
+    le_flash.c
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/fwupdate/platformAdaptor/inc
+    -I${LEGATO_ROOT}/components/fwupdate/fwupdateDaemon
+    -I${LEGATO_ROOT}/components/watchdogChain
+}
+
+requires:
+{
+    component:
+    {
+        ${LEGATO_FWUPDATE_PA_DEFAULT}
+        ${LEGATO_FWUPDATE_PA}
+        ${LEGATO_FWUPDATE_PA_DUALSYS}
+        ${LEGATO_FWUPDATE_PA_SINGLESYS}
+        ${LEGATO_FWUPDATE_PA_FLASH}
+        ${LEGATO_ROOT}/components/watchdogChain
+    }
+}

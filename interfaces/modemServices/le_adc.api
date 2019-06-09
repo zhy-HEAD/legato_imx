@@ -1,0 +1,63 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_adc ADC Channel API
+ *
+ * @ref le_adc_interface.h "API Reference" <br>
+ * @ref platformConstraintsAdc Constraints
+ *
+ * <HR>
+ *
+ * This API provides definitions for reading ADC inputs.
+ *
+ * le_adc_ReadValue() returns the value read from an ADC channel. It takes two arguments:
+ *    - The first is the name of the ADC channel to read.
+ *    - The second is used to return the value read.
+ *
+ * @warning Ensure to check the list of supported ADC channels on your specific platform before
+ * calling the le_adc_ReadValue() function. Please refer to  @subpage platformConstraintsAdc page.
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_adc_interface.h
+ *
+ * Legato @ref c_adc include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum ADC's name string length.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE ADC_NAME_MAX_LEN   = (30);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum ADC's name string length.
+ * One extra byte is added for the null character.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE ADC_NAME_MAX_BYTES = (ADC_NAME_MAX_LEN+1);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the value of an ADC input
+ *
+ * @return
+ *      - LE_OK            The function succeeded.
+ *      - LE_FAULT         The function failed.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t ReadValue
+(
+    string  adcName[ADC_NAME_MAX_LEN]  IN, ///< Name of the ADC to read.
+    int32           adcValue OUT    ///< The adc value
+);

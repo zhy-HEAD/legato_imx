@@ -1,0 +1,226 @@
+#
+# Configuration for Legato services.
+#
+# Copyright (C) Sierra Wireless Inc.
+#
+
+### Hidden Options ###
+
+config AVC_ENABLE_AV_MODEL
+  bool
+  depends on !TARGET_VIRT_X86 && !TARGET_VIRT_ARM
+  depends on !TARGET_LOCALHOST
+  depends on !TARGET_RASPI
+  default n if TARGET_CUSTOM
+  default y
+
+### General Options (applies to all services) ###
+
+config SERVICES_WATCHDOG
+  bool "Enable watchdog for Legato services"
+  default y
+  ---help---
+  The services watchdog ensures that Legato processes are restarted if they
+  deadlock.
+
+### Service Options ###
+
+menu "AirVantage Connector"
+
+choice
+  prompt "AirVantage Connector application"
+  default APP_AVC_LEGACY if TARGET_AR7 || TARGET_AR86
+  default APP_AVC_LWM2MCORE
+
+config APP_AVC_LEGACY
+  bool "legacy"
+  ---help---
+  Legacy AVC implementation.  Not for new devices.
+
+config APP_AVC_LWM2MCORE
+  bool "lwm2mcore"
+  ---help---
+  AVC implementation based on LWM2MCore.
+
+endchoice # end "AirVantage Connector application"
+
+config AVC_FEATURE_OBSERVE
+  bool "Enable LWM2M observe"
+  default y if TARGET_WP85
+  default y if TARGET_WP750X
+  default y if TARGET_WP76XX
+  default y if TARGET_WP77XX
+  default n
+  ---help---
+  Enable LWM2M observe.
+
+# TODO: better description
+
+config AVC_FEATURE_AVMS_CONFIG
+  bool "Enable AVMS configuration"
+  default y if TARGET_WP85
+  default y if TARGET_WP750X
+  default y if TARGET_WP76XX
+  default y if TARGET_WP77XX
+  default n
+  ---help---
+  Enable AVMS configuration.
+
+# TODO: better description
+
+config ENABLE_AV_DATA
+  bool "Enable AV Data"
+  default n if RTOS
+  default y
+  ---help---
+  Select this to enable support for AV Data features.
+
+config SOTA
+  bool "Enable software-over-the-air (SOTA) updates"
+  depends on POSIX
+  depends on ENABLE_AV_DATA
+  default y
+  ---help---
+  Select this to enable support for SOTA updates.  SOTA is not supported on
+  non-POSIX systems.
+
+config ENABLE_AV_SMS_COUNT
+  bool "Enable AV SMS counting support for LWM2M resources lwm2m.7.0.x"
+  default n if RTOS
+  default y
+  ---help---
+  When checked, SMS monitoring/counting is enabled and LWM2M resources lwm2m.7.0.x return valid
+  statistic values related to SMS counting.
+
+endmenu # end "AirVantage Connector"
+
+menu "AT Service"
+
+config ATSERVER_USER_ERRORS
+  bool "Enable user-defined errors in AT Server"
+  default y if LINUX
+  default n
+  ---help---
+  Allow setting user-defined error strings in AT Server.  Enabling this
+  increases the memory consumption of the AT Server.
+
+endmenu
+
+menu "Port Service"
+  visible if HAS_PORT_CONFIG_FILE_CONFIGURABLE
+
+config PORT_CONFIG_IS_STATIC
+  bool "The ports configuration is static"
+  default y if CUSTOM_OS
+  default n if LINUX
+  ---help---
+  Allow to choose if the ports configuration is statically defined.
+
+config PORT_JSON_CONFIG_FILE
+  string "Path to json file for Port configuration"
+  default "/legato/systems/current/apps/portService/read-only/usr/local/share/PortConfigurationFile.json" if LINUX
+  ---help---
+  Do not modify the default value.
+
+endmenu # end "Port Service"
+
+menu "Modem Service"
+
+config ENABLE_ECALL
+  bool "Enable eCall support"
+  default y
+  ---help---
+  Enable PAN European eCall or Russian ERA GLONASS emergency calling support.
+
+config MDM_HAS_SMSC_INFORMATION
+  bool "Has SMSC information"
+  default y
+  ---help---
+  Support SMSC (Short Message Service Centre) information in modem services.
+  Some terminals do not include the SMSC information in the PDU format string
+  and in those cases, this value must be deselected.
+
+config SIM_ENABLE_AUTOSWITCH
+  bool "Enable SIM auto switch support"
+  depends on QMI
+  default y if TARGET_WP76XX
+  default n
+  ---help---
+  Enable SIM auto switch support.
+
+endmenu
+
+menu "Secure Storage"
+
+config ENABLE_SECSTORE_ADMIN
+  bool "Enable secure storage administration API"
+  default n
+  ---help---
+  Allow administrative control of the Legato secure storage system.  This
+  permits reading, writing, and deleting secure storage files and should be
+  used with caution.
+
+endmenu
+
+menu "Socket Library"
+
+config SOCKET_LIB_SESSION_MAX
+  int "Maximum number of simultaneous sockets"
+  range 1 1024
+  default 4
+  ---help---
+  Maximum number of simultaneous sockets. This value is used for sizing
+  memory pools.
+
+choice
+  prompt "SSL encryption library"
+  default SOCKET_LIB_USE_MBEDTLS if RTOS
+  default SOCKET_LIB_USE_OPENSSL
+
+config SOCKET_LIB_USE_OPENSSL
+  bool "Use OpenSSL library for encryption"
+  ---help---
+  Use OpenSSL library for SSL encryption in socket library
+
+config SOCKET_LIB_USE_MBEDTLS
+  bool "Use mbed TLS library for encryption (EXPERIMENTAL)"
+  depends on EXPERIMENTAL
+  ---help---
+  Use mbed TLS library for SSL encryption in socket library
+
+endchoice #end "SSL encryption library"
+
+endmenu # end "Socket Library"
+
+menu "Config Tree"
+visible if RTOS
+
+config ENABLE_CONFIG_TREE
+  bool "Enable Config Tree"
+  default y
+  ---help---
+  Enable the Config Tree for storing settings.
+
+endmenu # end "Config Tree"
+
+menu "Positioning Service"
+
+config POSITIONING_ACTIVATION_MAX
+  int "Define the maximum number of concurrent positioning activation requests"
+  default 13
+
+config ENABLE_GNSS_ACQUISITION_RATE_SETTING
+  bool "Allow GNSS acquisition rate to be set via Legato API"
+  default y
+
+endmenu # end "Positioning Service"
+
+config FEATURE_SPISVC
+  bool "Enable SPI service"
+  default y if TARGET_WP85
+  default y if TARGET_WP750X
+  default y if TARGET_WP76XX
+  default y if TARGET_WP77XX
+  default n
+  ---help---
+  Enable the SPI service to allow devices to use SPI-attached peripherals.

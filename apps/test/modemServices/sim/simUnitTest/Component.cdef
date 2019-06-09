@@ -1,0 +1,25 @@
+requires:
+{
+    api:
+    {
+        modemServices/le_mrc.api         [types-only]
+        modemServices/le_sim.api         [types-only]
+        le_cfg.api                       [types-only]
+    }
+}
+
+sources:
+{
+    main.c
+    simStub.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/le_sim.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/le_mrc.c
+    simu/components/le_pa/pa_sim_simu.c
+    simu/components/le_pa/pa_mrc_simu.c
+}
+
+cflags:
+{
+    -Dle_msg_AddServiceCloseHandler=MyAddServiceCloseHandler
+    -I${LEGATO_ROOT}/components/watchdogChain
+}

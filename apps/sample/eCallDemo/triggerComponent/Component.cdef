@@ -1,0 +1,12 @@
+requires:
+{
+    api:
+    {
+        ecallApp.api
+    }
+}
+
+sources:
+{
+    trigger.c
+}

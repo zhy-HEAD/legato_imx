@@ -1,0 +1,93 @@
+/** @page platformConstraintsMdc Modem Control platform constraints
+
+@section mrc_SetSignalStrengthIndDelta Signal strength
+On Qualcomm-based platform, the signal strength indication delta resolution set in
+le_mrc_SetSignalStrengthIndDelta() API depends on the Radio Access Technology (RAT) used.
+
+For TD-SCDMA RAT technology, the signal delta is set with steps of 1 dBm with a minimum of one dBm.
+Intermediate values less than 1 dBm are rounded.
+For the other RAT technologies, the signal delta is set with steps of 0.1 dBm with a minimum of 0.1
+dBm.
+
+For example, to set a signal strength indication delta of 10.6 dBm, the delta value must be set to
+106. This value is rounded to 11 dBm for TD-SCDMA RAT technology. (105 would have been equivalent to
+10dBm on TD-SCDMA).
+
+Under TD-SCDMA RAT technology, a delta value less than 10 is forbiden.
+
+@section APN_length APN Length
+To set the Access Point Name (APN) for the given profile, le_mdc_SetAPN() API is used.
+
+The maximum APN length is limited by the platform.<br>
+
+|                                 | AR755x | AR758x | AR759x | AR8652 | WP750x | WP76xx | WP77xx | WP8548 |
+| ----------------------------- --| :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: |
+| Maxmium APN length              |        | 62     | 62     |        |        |        |        | 100    |
+
+
+@section Disconnect_Reason Disconnect Reason
+To get the disconnection reason, le_mdc_GetDisconnectionReasonExt() API is used.
+
+The following le_mdc_DisconnectionReason_t return values are unsupported by AR758x/9x platforms:<br>
+
+LE_MDC_DISC_INSUFFICIENT_MBMS_CAPABILITIES<br>
+LE_MDC_DISC_UNKNOWN_PDP_ADDR_OR_TYPE<br>
+LE_MDC_DISC_MULTICAST_TIME_OUT<br>
+LE_MDC_DISC_BEARER_CONTROL_MODE_VIOLATION<br>
+LE_MDC_DISC_IPV4_ONLY_ALLOWED<br>
+LE_MDC_DISC_IPV6_ONLY_ALLOWED<br>
+LE_MDC_DISC_SINGLE_ADDR_ONLY_ALLOWED<br>
+LE_MDC_DISC_COLLISION_WITH_NETWORK_INITIATED_REQ<br>
+LE_MDC_DISC_BEARER_HANDLING_UNSUPPORTED<br>
+LE_MDC_DISC_MAX_PDP_CONTEXTS<br>
+LE_MDC_DISC_APN_UNSUPPORTED_FOR_RAT_AND_PLMN<br>
+
+
+@section MT-PDP_context Mobile Terminated PDP context
+The Mobile Terminated Packet Data Protocol (PDP) context feature is not supported on all platforms.
+The table below indicates on which platform the feature is supported. (<b>'X'</b> means the feature
+is supported)
+
+|                          | AR7 | AR755x | AR758x | AR759x | AR8652 | WPx5xx | WP750x | WP76xx | WP77xx | WP85xx |
+| -------------------------| :-: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: |
+| MT-PDP context feature   |  X  |        |        |        |    X   |        |    X   |        |        |    X   |
+
+@section mrc_JammingDetection Jamming detection
+The jamming detection feature is supported on following platforms:<br>
+
+|                            | AR755x | AR758x | AR759x | AR8652 | WP750x | WP76xx | WP77xx | WP8548 |
+| -------------------------- | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: |
+| Jamming detection support  |        |        |        |        |        |   X    |        |        |
+
+
+@section mrc_SarBackoff SAR backoff
+The SAR backoff state is not supported by all platforms. Also, the maximum number of states may be
+different among platforms.<br>
+
+|                               | AR755x | AR758x | AR759x | AR8652 | WP750x | WP76xx | WP77xx | WP8548 |
+| ----------------------------- | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: |
+| SAR backoff state feature     |        |        |        |        |        |  X     |  X     |        |
+| SAR maximum number of states  |        |        |        |        |        |  8     |  8     |        |
+
+
+@section mrc_PciScan PCI Network Scan
+The PCI scan is not supported by all platforms. The table below indicates on which platform the
+fature is available. Also, only LTE PCI scan is supported.
+
+|                         | AR755x | AR758x | AR759x | AR8652 | WP750x | WP76xx | WP77xx | WP8548 |
+| ----------------------- | :----: | :----: | :----: | :----: | :----: | :----: | :----: | :----: |
+| LTE PCI scan feature    |        |   X    |    X   |        |        |    X   |        |        |
+
+In order to perform an LTE PCI scan, ensure that only LE_MRC_BITMASK_RAT_LTE is enabled
+in the RAT preference settings before starting the scan. The configuration can be done using:
+- AT command:  AT!SELRAT=06
+- CM tool: cm radio rat LTE
+- Legato API: le_mrc_SetRatPreferences(LE_MRC_BITMASK_RAT_LTE).<br>
+
+
+See @ref  c_mrc API<br>
+See @ref c_mdc API<br>
+Copyright (C) Sierra Wireless Inc.
+
+**/
+

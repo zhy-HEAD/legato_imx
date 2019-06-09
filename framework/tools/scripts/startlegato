@@ -1,0 +1,155 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+if ! [ $LEGATO_ROOT ]; then echo "Run bin/legs first" >&2; exit 1; fi
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+# This script starts the Legato Service Directory and Log Control Daemon, if they aren't
+# already running.  It outputs "Already running." and exits with code 1 if they were already
+# running.  It outputs "Started." and exits with code 0 if they were started.  It outputs
+# "***ERROR: ", followed by an error message (to standard error) and exits with code 2 if it fails.
+
+help_short_desc="start legato on the localhost"
+
+help_usage=(
+"[LOG_FILE]"
+)
+
+help_long_description=(
+"$commandName launches the Legato Service Directory, Log Control Daemon"
+"and Config Tree on the localhost machine. This provides a legato environmnet"
+"in which you can run and test apps on the localhost that have been built for the"
+"localhost target."
+""
+"If given, LOG_FILE specifies the name of a file to output the legato"
+"log messages to."
+""
+"Exit code:"
+" - 0 if the services started successfully"
+" - 1 if the services were already running"
+" - 2 if an error occurred"
+""
+"Currently running supervisor on localhost is not supported so apps"
+"requiring the services of the supervisor or the associated watchdog"
+"service cannot be run on localhost at this time."
+""
+"To stop legato see stoplegato"
+)
+
+
+CheckForHelp $@
+
+LOG_FILE="$1"
+
+
+if [ $# -gt 1 ]
+then
+    echo "***ERROR: Too many parameters." 1>&2
+    exit 2
+fi
+
+if ! [ $TARGET ]
+then
+    TARGET=localhost
+else
+    if [ "$TARGET" != "localhost" ]
+    then
+        echo "***ERROR: Sorry, target '$TARGET' is not supported yet." 1>&2
+        exit 2
+    fi
+fi
+
+
+# Directory where framework binaries can be found.
+BIN_DIR="$LEGATO_ROOT/build/$TARGET/framework/bin"
+
+
+# If the Service Directory isn't already running, start it.
+if ! pgrep serviceDir > /dev/null
+then
+    if [ "$LOG_FILE" != "" ]
+    then
+        $BIN_DIR/serviceDirectory 2>> "$LOG_FILE" &
+    else
+        $BIN_DIR/serviceDirectory &
+    fi
+
+    SERVICE_DIRECTORY_PID=$!
+
+    # Wait for the Service Directory to start.
+    sleep 0.2
+
+    if ! kill -0 $SERVICE_DIRECTORY_PID 2> /dev/null
+    then
+        echo "***ERROR: Failed to start Service Directory." 1>&2
+        exit 2
+    fi
+
+    STARTED=true
+else
+    echo "WARNING: Service Directory was already running." 1>&2
+fi
+
+
+# If the Log Control Daemon isn't already running, start it.
+if ! pgrep logCtrlDaemon > /dev/null
+then
+    if [ "$LOG_FILE" != "" ]
+    then
+        $BIN_DIR/logCtrlDaemon 2>> "$LOG_FILE" &
+    else
+        $BIN_DIR/logCtrlDaemon &
+    fi
+
+    LOG_CONTROL_DAEMON_PID=$!
+
+    if ! kill -0 $LOG_CONTROL_DAEMON_PID 2> /dev/null
+    then
+        echo "***ERROR: Failed to start Log Control Daemon." 1>&2
+        exit 2
+    fi
+
+    # Wait for start-up log spam to empty out.
+    sleep 0.2
+
+    STARTED=true
+else
+    echo "WARNING: Log Control Daemon was already running." 1>&2
+fi
+
+# If the Config Tree isn't already running, start it.
+if ! pgrep configTree > /dev/null
+then
+    if [ "$LOG_FILE" != "" ]
+    then
+        $BIN_DIR/configTree 2>> "$LOG_FILE" &
+    else
+        $BIN_DIR/configTree &
+    fi
+
+    CONFIG_TREE_PID=$!
+
+    if ! kill -0 $CONFIG_TREE_PID 2> /dev/null
+    then
+        echo "***ERROR: Failed to start Config Tree." 1>&2
+        exit 2
+    fi
+
+    # Wait for start-up log spam to empty out.
+    sleep 0.2
+
+    STARTED=true
+else
+    echo "WARNING: Config Tree was already running." 1>&2
+fi
+
+if [ $STARTED ]
+then
+    echo "Started."
+    exit 0
+else
+    echo "Already running."
+    exit 1
+fi

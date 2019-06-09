@@ -1,0 +1,63 @@
+start: manual
+
+executables:
+{
+    loneWolf = (loneWolf)
+}
+
+processes:
+{
+    run:
+    {
+        w01 = (loneWolf)
+        w02 = (loneWolf)
+        w03 = (loneWolf)
+        w04 = (loneWolf)
+        w05 = (loneWolf)
+        w06 = (loneWolf)
+        w07 = (loneWolf)
+        w08 = (loneWolf)
+        w09 = (loneWolf)
+        w10 = (loneWolf)
+        w11 = (loneWolf)
+        w12 = (loneWolf)
+        w13 = (loneWolf)
+        w14 = (loneWolf)
+        w15 = (loneWolf)
+        w16 = (loneWolf)
+        w17 = (loneWolf)
+        w18 = (loneWolf)
+        w19 = (loneWolf)
+        w20 = (loneWolf)
+        w21 = (loneWolf)
+        w22 = (loneWolf)
+        w23 = (loneWolf)
+        w24 = (loneWolf)
+        w25 = (loneWolf)
+        w26 = (loneWolf)
+        w27 = (loneWolf)
+        w28 = (loneWolf)
+        w29 = (loneWolf)
+        w30 = (loneWolf)
+        w31 = (loneWolf)
+        w32 = (loneWolf)
+        w33 = (loneWolf)
+        w34 = (loneWolf)
+        w35 = (loneWolf)
+        w36 = (loneWolf)
+        w37 = (loneWolf)
+        w38 = (loneWolf)
+        w39 = (loneWolf)
+        w40 = (loneWolf)
+        w41 = (loneWolf)
+        w42 = (loneWolf)
+        w43 = (loneWolf)
+        w44 = (loneWolf)
+        w45 = (loneWolf)
+        w46 = (loneWolf)
+        w47 = (loneWolf)
+        w48 = (loneWolf)
+        w49 = (loneWolf)
+        w50 = (loneWolf)
+    }
+}

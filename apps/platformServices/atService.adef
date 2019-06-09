@@ -1,0 +1,36 @@
+sandboxed: false
+
+executables:
+{
+    atClientDaemon = ( $LEGATO_ROOT/components/atServices/atClient )
+    atServerDaemon = ( $LEGATO_ROOT/components/atServices/atServer )
+}
+
+processes:
+{
+    run:
+    {
+        (atClientDaemon)
+        (atServerDaemon)
+    }
+    maxFileBytes: 5000K
+    faultAction: restart
+    #if ${LE_CONFIG_SERVICES_WATCHDOG} = y
+        maxWatchdogTimeout: 120000
+    #else
+        watchdogTimeout: never
+    #endif
+}
+
+bindings:
+{
+    atServerDaemon.atServer.le_atClient -> atClientDaemon.atClient.le_atClient
+    atServerDaemon.watchdogChain.le_wdog -> <root>.le_wdog
+}
+
+extern:
+{
+    atServerDaemon.atServer.le_atServer
+    atClientDaemon.atClient.le_atClient
+}
+

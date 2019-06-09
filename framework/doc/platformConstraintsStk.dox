@@ -1,0 +1,14 @@
+/** @page platformConstraintsStk SIM Toolkit
+
+The SIM Toolkit Legato functions can be used if the CAT (Card Application Toolkit) mode is properly
+set in your PRI (Product Requirement Information).
+
+@warning <b>Known limitation with WP8548:</b>
+OPEN_CHANNEL BIP command is not raised up to a user app. By consequence, it can't be
+accepted/rejected.
+
+See @ref le_sim_stk
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

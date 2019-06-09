@@ -1,0 +1,64 @@
+apps:
+{
+    $APP1
+}
+
+buildVars:
+{
+    APP1 = app1
+    CLIENT = client
+}
+
+apps:
+{
+    #include "app2.inc"
+}
+
+bindings:
+{
+    <foo>.client -> app2.server
+    app1.client -> app2.server
+    app2.client -> <baz>.server
+    <bar>.client -> <baz>.server
+}
+
+bindings:
+{
+    app2.client -> <baz>.server
+}
+
+#include "subsystem/subsystem.sinc"
+
+// Skip building kernel modules for these targets for now because of toolchain not supporting
+// building kernel modules for them. In addition, kernel source must be present on the
+// build host for 'localhost' target to build kernel module.
+
+#if ${TARGET} = localhost
+#elif ${TARGET} = ar7
+#elif ${TARGET} = ar86
+#elif ${TARGET} = raspi
+#else
+apps:
+{
+    kernelmodule/appmodule.adef
+}
+
+moduleSearch:
+{
+    $CURDIR/kernelmodule/module
+}
+
+kernelModules:
+{
+    module1.mdef
+    module2.mdef [optional]
+    module3.mdef [optional]
+    module4.mdef
+    module5.mdef
+}
+#endif
+
+apps:
+{
+    $CURDIR/testComponentHeader/testComponentHeader.adef
+}

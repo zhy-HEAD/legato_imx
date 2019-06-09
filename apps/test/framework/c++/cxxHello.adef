@@ -1,0 +1,15 @@
+
+executables:
+{
+    helloCpp = ( cppComponent )
+}
+
+processes:
+{
+    run:
+    {
+        ( helloCpp )
+    }
+}
+
+start: auto

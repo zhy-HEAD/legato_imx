@@ -1,0 +1,12 @@
+sources:
+{
+    magicClient.c
+}
+
+requires:
+{
+    api:
+    {
+        magic.api
+    }
+}

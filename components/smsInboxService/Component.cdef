@@ -1,0 +1,35 @@
+provides:
+{
+    api:
+    {
+        le_smsInbox1.api
+        le_smsInbox2 = le_smsInbox1.api
+    }
+}
+
+cflags:
+{
+    -I$CURDIR/../cfgEntries
+    -I$LEGATO_BUILD/framework/libjansson/include
+}
+
+requires:
+{
+    api:
+    {
+        le_sim.api
+        le_sms.api
+        le_cfg.api
+    }
+}
+
+ldflags:
+{
+    -ljansson
+}
+
+sources:
+{
+    le_smsInbox.c
+    smsInbox.c
+}

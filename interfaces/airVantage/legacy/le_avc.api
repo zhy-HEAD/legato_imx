@@ -1,0 +1,729 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_le_avc_legacy AirVantage Connector
+ *
+ * @deprecated This API should not be used for new applications and will be removed in a future
+ * version of Legato. It has been replaced by @ref c_le_avc .
+ *
+ * @ref le_avc_interface.h "API Reference" <br>
+ * @ref howToAVConnect "How To Connect"
+ *
+ * <HR>
+ *
+ * The AirVantage connector service provides an API to communicate with the AirVantage server.
+ *
+ * @section c_le_avc_update Firmware/Application Update
+ *
+ * The API for firmware/application update is divided into two parts:
+ *  - Allow a control app to contact the server for pending updates. If available,
+ *    can select to download or install the update.
+ *    <br>
+ *  - Allow an app to block an update from being installed. An app may need this if it's
+ *    performing a critical operation that can't be interrupted (e.g., eCall). This is necessary
+ *    as installing an update will cause the app to restart (either the app itself needs to restart
+ *    or a firmware change causes the modem to reset).
+ *
+ * @subsection c_le_avc_update_control Update Control
+ *
+ * A control app can start a session with an AirVantage server to determine if there
+ * is a pending update. This is done with le_avc_StartSession(). The current session can be
+ * stopped using le_avc_StopSession().  This cancels any query for pending update, or suspends a
+ * download in progress; however, it <b>won't stop</b> an install in progress.
+ *
+ * The status of a pending update is sent to the control app using a notification.
+ * The control app can use le_avc_AddStatusEventHandler() to register a handler function to
+ * receive this notification. The notification will be received after a session is started using
+ * le_avc_StartSession(). Sometimes, the modem firmware may decide to start a session with
+ * the AirVantage server. In this case, the notification could also be received, even if the
+ * control app has not explicitly called le_avc_StartSession().
+ *
+ * There can only be one pending update.  To query the type of update, use le_avc_GetUpdateType().
+ * If it's an app update, then le_avc_GetAppUpdateName() can be used to get the name of
+ * the app.
+ *
+ * If a download is pending, le_avc_AcceptDownload() can be used to allow the update to be
+ * downloaded. An AirVantage session will be initiated if this api is called while there is no
+ * active AirVantage session. le_avc_DeferDownload() can be used to defer the download for the
+ * specified number of minutes. After the defer time has elapsed, the pending download notification
+ * will be re-sent again to all registered apps. le_avc_AcceptDownload() can be used to accept the
+ * download even before the defer timer expires. This behaviour is true for deferring install
+ * and uninstall as well.
+ *
+ * Once an update has been downloaded, a new notification will be received to indicate that an
+ * install is pending. The control app can then use le_avc_AcceptInstall() to allow the
+ * install to proceed. Note that even if the control app calls le_avc_AcceptInstall(),
+ * the install may still be blocked by an app using the @ref c_le_avc_update_app
+ * functions. To defer the decision, the control app can use le_avc_DeferInstall() to
+ * defer the install for the specified number of minutes. After the defer time has elapsed, the
+ * pending install notification will be re-sent to allow the control app to make a new
+ * decision, or again defer.
+ *
+ * If an uninstall is pending, then le_avc_AcceptUninstall() can be used to allow the uninstall to
+ * proceed. To defer the decision, le_avc_DeferUninstall() can be used to defer the uninstall for
+ * the specified number of minutes. In case of an upgrade, the existing application will not be
+ * uninstalled after le_avc_AcceptUninstall() is called. le_avc_AcceptUninstall() is only used to
+ * signal the server to start downloading the new application. During an upgrade process the
+ * control app has to accept the uninstall of the existing version followed by accepting the
+ * download and install of the new version.
+ *
+ * Accepting an app install or uninstall will not initiate an AirVantage session if no session
+ * is active.  The control app should start an AirVantage session before accepting an app
+ * install/uninstall, to ensure the process is completed, and the server is updated.
+ *
+ * If a control app doesn't register for notifications using le_avc_AddStatusEventHandler(),
+ * then any pending downloads and installs will happen automatically, subject to any restrictions
+ * imposed by app using the @ref c_le_avc_update_app functions.  Also, only the control app
+ * registered for notifications will be allowed to use the other update control API functions.
+ *
+ * Only one control app is allowed to register for notifications.  Any subsequent attempts by
+ * either the same app, or a different app is treated as a fatal error (i.e. non-recoverable)
+ * and will result in the client app being terminated.
+ *
+ * In case of any error incurred during app download/install, an error code will be set and the
+ * control app can retrieve it by calling le_avc_GetErrorCode().
+ *
+ * @subsection c_le_avc_update_app Application Blocking
+ *
+ * When an app is about to perform a critical operation, it can block the installation of
+ * an update with le_avc_BlockInstall(), and after it's finished with the critical operation, it
+ * can unblock the install with le_avc_UnblockInstall().
+ *
+ * What constitutes a critical operation depends on the app.  An eCall app might
+ * block installs for the duration that it runs.  A data collection app that wakes up
+ * once an hour might block installs while it collects and stores and/or transmits a new data
+ * sample, and then unblock installs just before it goes to sleep again.
+ *
+ * If an install can't be applied because it's blocked, another attempt to apply the install
+ * will be made at a later time.
+ *
+ * The control app can add a session controller handler using le_avc_AddSessionRequestEventHandler().
+ * If the control app registers a session request event handler, requests by user apps to open or
+ * close session will be forwarded to the control app. If the control app doesn't register a session
+ * request handler, avms session can be opened anytime by user apps.
+ *
+ * @section c_le_avc_GetPollingTimer Polling Timer
+ *
+ * The embedded module will periodically initiate a connection to the Device Services server
+ * according to the polling timer. The device initates the connection periodically, so that it can
+ * poll the server if there are any pending jobs. Writing 0 to the polling timer disables polling
+ * mode. Polling timer values range from 0 to 525600 minutes. The polling timer value is persistent.
+ * le_avc_GetPollingTimer() reads the polling timer and le_avc_SetPollingTimer() writes the polling
+ * timer.
+ *
+ * @section c_le_avc_GetRetryTimers Retry Timers
+ *
+ * If an error occurs during a connection to the Device Services server (WWAN DATA establishment
+ * failed, http error code received), the embedded module will initiate a new connection according
+ * to the values defined in the retry timers. The timers are tried in sequence until a connection is
+ * established, or all enabled retry timers are exhausted. After all the enabled timers are
+ * exhausted, a connection will be initiated only on a command from user (le_avc_startSession() )
+ * or at the expiry of the polling timer. The retry timer values are persistent. Writing 0
+ * to one of the retry timers will disable it. Retry timer values range from 0 to 20160 minutes.
+ * The api le_avc_GetRetryTimers() reads the polling timers in an array and the api
+ * le_avc_SetRetryTimers() writes the polling timers. When writing to the retry timers, values of
+ * all the 8 timers have to be defined.
+ *
+ * @section le_avcService_configdb Service Configuration Tree
+ * @copydoc le_avcService_configdbPage_Hide
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+
+ /**
+ * @interface le_avcService_configdbPage_Hide
+ *
+ * The configuration database path for the modemActivityTimeout is:
+ * @verbatim
+   /
+       apps/
+           avcService/
+                    modemActivityTimeout
+   @endverbatim
+ *
+ *
+ * After an AirVantage session is started, if there's no activity from the modem within the timer
+ * interval,then LE_AVC_NO_UPDATE state will be returned to the app. However, this modem activity
+ * timeout can be overridden by setting an integer value at /apps/avcService/modemActivityTimeout.
+ * The modem activity timer is initialized only when the avcService starts. If a valid entry >0 is
+ * found,then it will be used instead of the default value of 20 seconds. The following steps should
+ * be used to set the modemActivtyTimeout.
+ *
+ *
+ * @verbatim
+   config set /apps/avcService/modemActivityTimeout xx int
+   app restart avcService
+   @endverbatim
+ *
+ * @note
+ * Everytime a new value is written to modemActivityTimeout, the avcService needs to be
+ * restarted to read the new value.
+ *
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_avc_interface.h
+ *
+ * Legato @ref c_le_avc include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Update Control API
+ */
+//--------------------------------------------------------------------------------------------------
+
+
+USETYPES le_limit.api;
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum APN name length without NULL terminator.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE APN_NAME_MAX_LEN = 48;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum APN name length including NULL terminator.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE APN_NAME_MAX_LEN_BYTES = APN_NAME_MAX_LEN + 1;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum user name length without NULL terminator.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE USERNAME_MAX_LEN = 28;
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum user name length including NULL terminator.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE USERNAME_MAX_LEN_BYTES = USERNAME_MAX_LEN + 1;
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum password length without NULL terminator..
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE PASSWORD_MAX_LEN = 28;
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum password length including NULL terminator.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE PASSWORD_MAX_LEN_BYTES = PASSWORD_MAX_LEN + 1;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum number of retry timers.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE NUM_RETRY_TIMERS = 8;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Default HTTP status.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE HTTP_STATUS_INVALID = 0xFFFF;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Status of session or update
+ *
+ * If an update is pending, it must first be downloaded and then installed.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM Status
+{
+    NO_UPDATE,              ///< No updates pending
+    DOWNLOAD_PENDING,       ///< Update pending download
+    DOWNLOAD_IN_PROGRESS,   ///< Download in progress
+    DOWNLOAD_COMPLETE,      ///< Download has completed
+    DOWNLOAD_FAILED,        ///< An error occurred downloading the update
+    INSTALL_PENDING,        ///< Install is pending (implies download complete)
+    INSTALL_IN_PROGRESS,    ///< Install in progress
+    INSTALL_COMPLETE,       ///< Update has been successfully installed
+    INSTALL_FAILED,         ///< An error occurred installing the update
+    UNINSTALL_PENDING,      ///< Uninstall is pending
+    UNINSTALL_IN_PROGRESS,  ///< Uninstall in progress
+    UNINSTALL_COMPLETE,     ///< App has been successfully uninstalled
+    UNINSTALL_FAILED,       ///< An error occurred uninstalling the update
+    SESSION_STARTED,        ///< Session with AV server started
+    SESSION_STOPPED         ///< Session with AV server stopped
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Request to open or close avms session.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM SessionRequest
+{
+    SESSION_ACQUIRE,        ///< Request by user app to open AV session
+    SESSION_RELEASE         ///< Request by user app to close AV session
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * The type of pending update
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM UpdateType
+{
+    UNKNOWN_UPDATE,
+    FIRMWARE_UPDATE,
+    FRAMEWORK_UPDATE,
+    APPLICATION_UPDATE
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Error code used to provide diagnostic information after a failure (includes both download and
+ * install failure).
+ *
+ * @note
+ *     Additional information may also be available in the target device's system log.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM ErrorCode
+{
+    ERR_NONE,                       ///< No error.
+    ERR_BAD_PACKAGE,                ///< Encountered a bad package.
+    ERR_INTERNAL,                   ///< Something failed while doing install/download.
+    ERR_SECURITY_FAILURE            ///< Security check failure while installing the package.
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Session type indicates whether the device is connected to the bootstrap server or the
+ * device management server.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM SessionType
+{
+    BOOTSTRAP_SESSION,              ///< Bootstrap session.
+    DM_SESSION,                     ///< Device Management session.
+    SESSION_INVALID                 ///< Session type invalid.
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Handler for update availability status
+ */
+//--------------------------------------------------------------------------------------------------
+HANDLER StatusHandler
+(
+    Status updateStatus IN,         ///< status of pending update, if available
+    int32 totalNumBytes IN,         ///< Total number of bytes to be downloaded
+                                    ///< only valid when updateStatus is one of
+                                    ///< DOWNLOAD_PENDING, DOWNLOAD_IN_PROGRESS or DOWNLOAD_COMPLETE.
+                                    ///< returns -1 if value is unknown
+    int32 dloadProgress IN          ///< download completion in percentage
+                                    ///< only valid when updateStatus is one of
+                                    ///< DOWNLOAD_PENDING, DOWNLOAD_IN_PROGRESS or DOWNLOAD_COMPLETE.
+                                    ///< returns -1 if value is unknown
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This event provides information on update availability status
+ */
+//--------------------------------------------------------------------------------------------------
+EVENT StatusEvent
+(
+    StatusHandler handler
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Handler for receiving session open or close request.
+ */
+//--------------------------------------------------------------------------------------------------
+HANDLER SessionRequestHandler
+(
+    SessionRequest request IN    ///< Request to open or close AV session
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This event provides information on session open or close request.
+ */
+//--------------------------------------------------------------------------------------------------
+EVENT SessionRequestEvent
+(
+    SessionRequestHandler handler
+);
+
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Start a session with the AirVantage server
+ *
+ * This will cause a query to be sent to the server, for pending updates. If a download was
+ * previously suspended, then this resumes the download.
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ *      - LE_DUPLICATE if already connected to AirVantage server.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t StartSession
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Stop a session with the AirVantage server
+ *
+ * If a download is in progress, then this suspends the download.
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t StopSession
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Send a specific message to the server to be sure that the route between the device and the server
+ * is available.
+ * This API needs to be called when any package download is over (successfully or not) and before
+ * sending any notification on asset data to the server.
+ *
+ * @return
+ *      - LE_OK when the treatment is launched
+ *      - LE_FAULT on failure
+ *      - LE_UNSUPPORTED when the API is not supported
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t CheckRoute
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Accept the currently pending download
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t AcceptDownload
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Defer the currently pending download, for the given number of minutes
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t DeferDownload
+(
+    uint32 deferMinutes IN
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Accept the currently pending install
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t AcceptInstall
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Defer the currently pending install
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t DeferInstall
+(
+    uint32 deferMinutes IN
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Accept the currently pending uninstall
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t AcceptUninstall
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Defer the currently pending uninstall
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t DeferUninstall
+(
+    uint32 deferMinutes IN
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the update type of the currently pending update
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT if not available
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetUpdateType
+(
+    UpdateType   updateType OUT
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the name for the currently pending app update
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT if not available, or isn't APPL_UPDATE type
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetAppUpdateName
+(
+    string updateName[le_limit.APP_NAME_LEN] OUT
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Application Blocking API
+ */
+//--------------------------------------------------------------------------------------------------
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Reference returned by BlockInstall function and used by UnblockInstall function
+ */
+//--------------------------------------------------------------------------------------------------
+REFERENCE BlockRequest;
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Prevent any pending updates from being installed.
+ *
+ * @return
+ *      - Reference for block update request (to be used later for unblocking updates)
+ *      - NULL if the operation was not successful
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION BlockRequest BlockInstall
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Allow any pending updates to be installed
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION UnblockInstall
+(
+    BlockRequest blockRef IN   ///< block request ref returned by le_avc_BlockInstall
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to get error code when update fails.
+ *
+ * @return
+ *      - Error code of encountered error.
+ *      - ERR_NONE if update is in any other state.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION ErrorCode GetErrorCode
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to read the current session type, or the last session type if there is no
+ * active session.
+ *
+ * @return
+ *      - SessionType
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION SessionType GetSessionType
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to read the http status of the last download.
+ *
+ * @return
+ *      - HttpStatus as defined in RFC 7231, Section 6.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION uint16 GetHttpStatus
+(
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to read the polling timer.
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_FAULT if not available
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetPollingTimer
+(
+    uint32  pollingTimer OUT    ///< Polling timer (0 to 525600 minutes).
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to read the retry timers.
+ *
+ * @return
+ *      - LE_OK on success.
+ *      - LE_FAULT if not able to read the timers.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetRetryTimers
+(
+    uint16 timerValue[NUM_RETRY_TIMERS]   OUT ///< Array of the retry timers.
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to read APN configuration.
+ *
+ * @return
+ *      - LE_OK on success.
+ *      - LE_FAULT if there is any error while reading.
+ *      - LE_OVERFLOW if the buffer provided is too small.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetApnConfig
+(
+    string apnName[APN_NAME_MAX_LEN]   OUT,
+    string userName[USERNAME_MAX_LEN]  OUT,
+    string userPwd[PASSWORD_MAX_LEN]   OUT
+);
+
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to write APN configuration.
+ *
+ * @return
+ *      - LE_OK on success.
+ *      - LE_FAULT if not able to write the APN configuration.
+ *      - LE_OVERFLOW if one of the input strings is too long.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetApnConfig
+(
+    string apnName[APN_NAME_MAX_LEN]    IN,
+    string userName[USERNAME_MAX_LEN]   IN,
+    string userPwd[PASSWORD_MAX_LEN]    IN
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to set the polling timer.
+ *
+ * @return
+ *      - LE_OK on success.
+ *      - LE_FAULT if not able to read the timers.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetPollingTimer
+(
+    uint32  pollingTimer IN    ///< Polling timer (0 to 525600 minutes).
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Function to set the retry timers.
+ *
+ * @return
+ *      - LE_OK on success.
+ *      - LE_FAULT if not able to write the timers.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetRetryTimers
+(
+    uint16 timerValue[NUM_RETRY_TIMERS]   IN  ///< Array of 8 retry timers.
+);

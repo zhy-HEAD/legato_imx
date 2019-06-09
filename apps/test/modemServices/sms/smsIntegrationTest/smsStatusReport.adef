@@ -1,0 +1,19 @@
+start: manual
+
+executables:
+{
+    smsStatusReport = ( smsStatusReport )
+}
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LEVEL = DEBUG
+    }
+}
+
+bindings:
+{
+    smsStatusReport.smsStatusReport.le_sms -> modemService.le_sms
+}

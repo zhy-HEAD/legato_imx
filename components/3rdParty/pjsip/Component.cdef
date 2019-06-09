@@ -1,0 +1,37 @@
+bundles:
+{
+    file:
+    {
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjlib-util.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjlib-util.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia-audiodev.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia-audiodev.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia-codec.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia-codec.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia-videodev.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjmedia-videodev.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjnath.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjnath.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsip-simple.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsip-simple.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsip.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsip.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsip-ua.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsip-ua.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpj.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpj.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsua2.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsua2.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsua.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libpjsua.so.2 /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libsrtp.so /usr/lib/
+        ${LEGATO_BUILD}/3rdParty/pjsip/lib/libsrtp.so.2 /usr/lib/
+    }
+}
+
+externalBuild:
+{
+    "${CURDIR}/make.sh"
+}

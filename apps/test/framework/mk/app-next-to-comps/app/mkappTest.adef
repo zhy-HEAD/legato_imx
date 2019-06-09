@@ -1,0 +1,46 @@
+bundles:
+{
+    file:
+    {
+            ../files/xyz  /usr/share/files/
+        [r] ${BUILD_DIR}/../libexternal/libexternal.$TARGET.so  /lib/
+    }
+}
+
+requires:
+{
+    file:
+    {
+        /lib/libexternal.so /lib/libexternal.so.1
+    }
+}
+
+executables:
+{
+    fromComponents = ( foo bar foo )
+}
+
+processes:
+{
+    envVars:
+    {
+    }
+
+    run:
+    {
+        proc1 = ( "fromComponents" 'foo' "'bar'" - '"jam"' "--crazy=12" "-c 9")
+        proc2 = ( "fromComponents foo bar - jam --crazy=12 -c 9" )
+        (fromComponents foo
+            bar // some random
+                // comment
+            - jam --crazy -c 9 // Three args on one line with a C++ comment.
+            )
+    }
+
+    envVars:
+    {
+    }
+}
+
+start: manual
+

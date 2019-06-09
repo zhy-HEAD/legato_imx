@@ -1,0 +1,214 @@
+/** @page howToDebugGDB Debug using GDB
+
+This topic provides details on using the open-source @c GDB tool on a dev machine to debug sandboxed
+apps. This type of remote debugging is useful where resources are limited like in embedded apps.
+
+The sample code uses an app named @c hw with one executable @c hw_exe and processes created in
+the same executable (@c hw_proc1, @c hw_proc2, etc.).
+
+High-level steps to use GDB with a sandboxed app:
+
+To debug a running app which is part of the default system:
+- On your dev machine, run @verbatim $ remoteDebug appName processName targetIP @endverbatim.
+
+To debug app startup, or app which is not part of default system:
+When compiling:
+- @ref howToDebugGDB_building Make sure to build debug symbols
+
+On the target device:
+- Make sure the @ref basicTargetDevMode_installDev "devMode app" @c is installed and running
+- Run the sandboxed app @ref howToDebugGDB_withoutProcess "without the process" you want to debug.
+- @ref howToDebugGDB_makeGDBAvail "Start" @c gdbserver in the sanboxed app.
+- @ref howToDebugGDB_withProcess "Start the process" in the sandboxed app with @c gdbserver.
+- @ref howToDebugGDB_removeGDB "Remove" @c gdb from the sandboxed app after you're finished
+debugging.
+
+On your dev machine:
+- @ref howToDebugGDB_launchGDBhost "Launch" @c gdb from the apps make directory.
+- @ref howToDebugGDB_remoteConnect "Remote connect" to the target and run @c gdb commands.
+
+See @ref basicTargetConfigIP if you need to setup your host/target communications.
+
+For ease of debugging you may want to disable watchdog.  To do this turn off the watchdog option
+within KConfig and rebuild and update the framework.
+@verbatim
+Services  --->
+    [ ] Enable watchdog for Legato services
+@endverbatim
+
+@note It's also advisable to use absolute paths on both your dev machine and target. i.e.;
+/legato/systems/current/appsWriteable/devMode/bin/gdbserver to reference gdbserver.
+
+@section howToDebugGDB_sampleCode Sample Code
+The following simple app sample code is used in examples.
+
+@subsection howToDebugGDB_sampleCode_adef hw.adef
+@code
+start: manual
+
+executables:
+{
+    hw_exe = ( hw )
+}
+
+processes:
+{
+    run:
+    {
+        hw_proc1 = ( hw_exe )
+        hw_proc2 = ( hw_exe )
+        hw_proc3 = ( hw_exe )
+        hw_proc4 = ( hw_exe )
+    }
+}
+@endcode
+
+See @ref getStartedApps for more info.
+
+@subsection howToDebugGDB_sampleCode_cdef .cdef
+
+@c hw/Component.cdef
+@code
+sources:
+{
+    hello.c
+}
+@endcode
+
+@subsection howToDebugGDB_sampleCode_helloC hello.c
+
+@c hw/hello.c
+
+@code
+#include "legato.h"
+
+COMPONENT_INIT
+{
+    LE_INFO("HELLO WORLD.");
+}
+@endcode
+
+See @ref getStartedApps for more info.
+
+@section howToDebugGDB_building Building with Debug Symbols
+
+When building your app, build as normal, but add @verbatim -d <debug-path> @endverbatim to the
+mkapp command-line to generate debug symbols in @c <debug-path>.  You can use the same
+directory for all your apps -- each program or library will use a unique name.
+
+When building the Legato framework from source, debug symbols for the legato framework are
+always generated and placed in @c build/<target>/debug.
+
+@section howToDebugGDB_onTarget Running GDB on your Target Device
+
+@subsection howToDebugGDB_withoutProcess Running the App without a Process
+
+To use GDB, start the sandboxed app excluding the process being debugged:
+
+On the target, run the app excluding the process being debugged, @c hw_proc3:
+@verbatim
+# app start hw --norun=hw_proc3
+@endverbatim
+
+@subsection howToDebugGDB_makeGDBAvail Start GDB on an App
+
+On your dev machine, set up port forwarding from local host to the target.  This bypasses the
+firewall on the target and allows GDB server to connect.
+
+@verbatim
+$ ssh -L 2000:localhost:2000 root@192.168.2.2
+@endverbatim
+
+@warning Do not end this session to the Target or the port forwarding will end. GDB won't be
+able to connect to the Target.
+
+On the target, start @c gdbserver in the sandboxed @c /bin directory by running:
+@verbatim
+# gdbCfg <app name>
+@endverbatim
+
+For Example:
+@verbatim
+# gdbCfg hw
+@endverbatim
+
+@subsection howToDebugGDB_withProcess Start the Process with GDB enabled
+
+On the target, start @c gdbserver by starting the app with the arguments specified after @c --
+(two dashes):
+
+@verbatim
+# app runProc <app name> --exe=/bin/gdbserver -- localhost:2000 /bin/<app bin dir>
+@endverbatim
+
+For Example:
+@verbatim
+# app runProc hw --exe=/bin/gdbserver -- localhost:2000 /bin/hw_exe
+@endverbatim
+
+If started successfully, the following will be returned: <br>
+@verbatim
+Process /bin/hw_exe created; pid = 9783
+Listening on port 2000
+@endverbatim
+
+@section howToDebugGDB_launchGDBhost Launch GDB on your Dev Machine
+
+To start GDB on your Dev Machine:
+- @ref howToDebugGDB_launchGDBhost "Launch" @c gdb on the Dev Machine.
+- @ref howToDebugGDB_remoteConnect "Remote connect" to the target and run regular @c gdb commands.
+
+@subsection howTODebugGDB_lanchGDBhost Launch gdb from Dev Machine
+
+You need to run the commands from the directory where the @c hw app was made.
+The path @c _build_hw/wp85/app/hw/staging/read-only/bin/hw_exe is relative to the app directory;
+this build directory is generated when an app is made and the gdb commands must be run here.
+
+In this example, we're running the @c gdb tool (@c arm-poky-linux-gnueabi-gdb) located in our
+target's toolchain path
+(@c /opt/swi/y17-ext/sysroots/x86_64-pokysdk-linux/usr/bin/arm-poky-linux-gnueabi for wp85).
+Use the @c findtoolchain command on your dev machine to determine the toolchain path.
+
+Launch GDB from the toolchain using the following command (substitute your program and path for hw):
+
+@verbatim
+$ ~/LegatoApps/hw$ /opt/swi/y17-ext/sysroots/x86_64-pokysdk-linux/usr/bin/arm-poky-linux-gnueabi/arm-poky-linux-gnueabi-gdb _build_hw/wp85/app/hw/staging/read-only/bin/hw_exe
+@endverbatim
+
+@subsection howToDebugGDB_remoteConnect Remote Connect
+
+After GDB is launched, use the @c target @c remote command to connect to the target:
+@verbatim
+$ (gdb) target remote localhost:2000
+@endverbatim
+
+@note If you get an error about connecting make sure you have a @ref howToDebugGDB_makeGDBAvail
+"ssh -L (port forwarding) session" open between the dev machine and target.
+
+The target will display:
+@verbatim
+Remote debugging using localhost:2000
+@endverbatim
+
+Now tell gdb to fetch the libraries to debug across the network, but use local debug symbols:
+@verbatim
+$ (gdb) set debug-file-directory <debug-path>
+$ (gdb) set sysroot remote:/
+@endverbatim
+
+You should see GDB reading symbols for Legato components.
+
+You can now run any of the standard @c gdb debugging commands on @c hw_exe.
+
+@section howToDebugGDB_removeGDB Remove GDB from Sandbox
+
+Once you've finished debugging, remove @c gdbserver from the sandbox @c /bin directory on the target:
+@verbatim
+# gdbCfg hw --reset
+@endverbatim
+
+Refer to the many available open source resources if you need help using @c gdb.
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

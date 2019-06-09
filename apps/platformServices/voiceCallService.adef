@@ -1,0 +1,35 @@
+sandboxed: false
+
+executables:
+{
+    voiceCallService = ( $LEGATO_ROOT/components/voiceCallService )
+}
+
+start: manual
+
+processes:
+{
+    run:
+    {
+        (voiceCallService)
+    }
+
+    faultAction: restart
+    #if ${LE_CONFIG_SERVICES_WATCHDOG} = y
+        maxWatchdogTimeout: 120000
+    #else
+        watchdogTimeout: never
+    #endif
+}
+
+bindings:
+{
+    voiceCallService.voiceCallService.le_mcc -> modemService.le_mcc
+    voiceCallService.voiceCallService.le_audio -> audioService.le_audio
+    voiceCallService.watchdogChain.le_wdog -> <root>.le_wdog
+}
+
+extern:
+{
+    voiceCallService.voiceCallService.le_voicecall
+}

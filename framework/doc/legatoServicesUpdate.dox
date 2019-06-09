@@ -1,0 +1,102 @@
+/** @page legatoServicesUpdate Update
+
+
+@section legatoServicesUpdate_Overview Overview
+
+The process of updating software in a Legato based system split into multiple parts:
+- the @c updateDaemon service which accepts updates over it's API @ref c_update.
+- separate update clients, provide the ability to initiate updates over various channels (command
+  line, ssh, or even from the cloud using an appropriate cloud client).
+- parts of the Legato software stack assist the update service in providing its functionality.
+- the startup system also plays a roll in update and rollback.
+
+For the specifics of what the update service does and the actions that it performs see
+@ref conceptsUpdates.
+
+@note Because the specifics of how platforms function can differ, the behavior of the of the update
+service can vary by platform.  This document focuses on the update process for common Sierra
+Wireless modules.
+
+@subsection legatoServicesUpdate_AboutService Update Service
+
+The @c updateDaemon process is part of Legato's core system services.  It is run and controlled by
+the Supervisor and isn't a Legato app, so can't be started or stopped.
+
+When the update receives a @subpage legatoServicesUpdatePack ".update file" it extracts update
+commands and files from the @c .update pack and applies them to the target.
+
+The @c .update file commands understood by the service are:
+-  Update System -- <b>Install a Legato system.</b>  Updates the runtime environment but doesn't
+   modify the OS or any support device firmware.
+-  Update App -- <b>Install an application.</b>  If an application of the same name is already
+   installed it is replaced with the version found within the @c .update pack.
+-  Remove App -- <b>Removes the named application.</b>  This is the only update command that doesn't
+   have any data files associated with it.
+-  Update Firmware -- </b>Update the firmware of an attached hardware device.</b>  For example the
+   cellular modem found in wireless modules.  On systems without a firmware portion, like the
+   virtual platform, this command is unsupported.
+
+@note On Sierra Wireless modules, firmware level updates can include replacement copies of
+whole partition file systems.  It is possible to replace the "Base" version of Legato this
+way.  See @ref legatoServicesUpdate_Base for more details on this.  It is also possible to
+create a @c .cwe file that instructs the modem to erase and reformat the user data partition
+allowing the user to create an update that takes their module back to a factor default state.
+
+@note On Sierra Wireless modules when firmware updates are installed a full reboot of the module
+will be triggered.  For system updates only the runtime environment will be restarted.
+
+@subsection legatoServicesUpdate_APIs Update APIs
+
+The following APIs are provided by the update service to monitor and control the update process:
+- @ref c_update
+- @ref c_updateCtrl
+- @ref c_le_instStat
+- @ref c_le_appRemove
+
+@subsubsection legatoServicesUpdate_APIs_update Update API
+
+<b>API: @ref c_update </b>
+
+The Update API is used to push an update to the service and provides functions for getting
+information about the current and previously installed system.
+
+@subsubsection legatoServicesUpdate_APIs_updateCtrl Update Control API
+
+<b>API: @ref c_updateCtrl</b>
+
+The update control API is used to control the update process.  For example, applying an
+update can cause the system to restart itself, an application can use le_updateCtrl.api to choose to
+block updates from being applied, if it is running a critical process that can't be interrupted.
+
+@subsubsection legatoServicesUpdate_APIs_instStat Install Status API
+
+<b>API:  @ref c_le_instStat</b>
+
+The API Install Status can be used by an application to watch for other applications being installed
+or uninstalled from a system.
+
+@subsection legatoServicesUpdate_Tools Update Clients
+
+Within the application framework there are multiple clients that use the update service:
+- a command line client @ref toolsHost_update tool, used to transfer update packs from your dev
+machine to the target for installation.
+- @ref legatoServicesAirVantage uses the @c update service to receive and install software updates
+from the AirVantage server.
+
+You are also able to create your own app to handle updates. If you have your own method or protocol
+for delivering updates, you can build a service to download and control the updates.
+
+<h1>API Overview </h1>
+
+| Service                            | Description                                        | multi-app safe             |
+| ---------------------------------- | -------------------------------------------------- | :------------------------: |
+| @subpage c_update                  | Apply app and firmware updates                     | @image html green_dot.png  |
+| @subpage c_updateCtrl              | Control app and firmware updates                   | @image html green_dot.png  |
+| @subpage c_le_instStat             | App install/uninstall notification                 | @image html green_dot.png  |
+| @subpage c_fwupdate                | Firmware image updates                             |                            |
+| @subpage c_flash                   | Flash management                                   | @image html green_dot.png  |
+| @subpage c_le_dualsys              | Dual systems partition definition                  |                            |
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

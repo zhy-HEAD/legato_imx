@@ -1,0 +1,34 @@
+sandboxed: false
+
+executables:
+{
+    cellNetService = ( $LEGATO_ROOT/components/cellNetService )
+}
+
+processes:
+{
+    run:
+    {
+        (cellNetService)
+    }
+
+    faultAction: restart
+    #if ${LE_CONFIG_SERVICES_WATCHDOG} = y
+        maxWatchdogTimeout: 120000
+    #else
+        watchdogTimeout: never
+    #endif
+}
+
+bindings:
+{
+    cellNetService.cellNetService.le_mrc -> modemService.le_mrc
+    cellNetService.cellNetService.le_sim -> modemService.le_sim
+    cellNetService.cellNetService.le_secStore -> secStore.le_secStore
+    cellNetService.watchdogChain.le_wdog -> <root>.le_wdog
+}
+
+extern:
+{
+    cellNetService.cellNetService.le_cellnet
+}

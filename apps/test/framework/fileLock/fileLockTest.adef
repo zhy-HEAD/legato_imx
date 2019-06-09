@@ -1,0 +1,11 @@
+start: manual
+
+executables:
+{
+    fileLockTest = ( fileLockTest )
+}
+
+processes:
+{
+    run: { (fileLockTest) }
+}

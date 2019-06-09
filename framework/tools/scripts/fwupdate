@@ -1,0 +1,94 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+#
+# Host-based wrapper around target-based fwupdate tool
+#
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+help_short_desc="download or query modem firmware"
+
+help_usage=(
+"help"
+"downloadOnly FILE [TARGET_IP]"
+"query [TARGET_IP]"
+"install [TARGET_IP]"
+"checkStatus [TARGET_IP]"
+"markGood [TARGET_IP]"
+"download FILE [TARGET_IP]"
+)
+
+help_long_description=(
+"$commandName help"
+"  - Print this help message and exit"
+""
+"$commandName query [TARGET_IP]"
+"  - Query the current firmware version. This includes the modem firmware version, the"
+"    bootloader version, and the linux kernel version."
+"    This can be used after a download and modem reset, to confirm the firmware version."
+""
+"$commandName downloadOnly FILE [TARGET_IP]"
+"  - Download the given CWE file."
+"    Waits for another command after a successful download."
+""
+"$commandName checkStatus [TARGET_IP]"
+"  - Check the status of the downloaded package (DualSys platform only)."
+""
+"$commandName install [TARGET_IP]"
+"  - Install the downloaded firmware."
+"    Single System: Trigger reset to initiate install."
+"    Dual System: Swap and reset to run the downloaded firmware or go back to the old system"
+"    if the running system is not marked good."
+""
+"$commandName markGood [TARGET_IP]"
+"  - Mark good the current system (DualSys platform only)."
+""
+"$commandName download FILE [TARGET_IP]"
+"  - do download, install and markGood in one time."
+"    After a successful download, the modem will reset."
+)
+
+CheckForHelp $@
+
+COMMAND=$1
+
+if [ "$COMMAND" = "query" ] || [ "$COMMAND" = "install" ] || [ "$COMMAND" = "markGood" ] || [ "$COMMAND" = "checkStatus" ]
+then
+    SetTargetIP $2
+    SshToTarget "$BIN_PATH/fwupdate $COMMAND"
+    exit $?
+fi
+
+if [ "$COMMAND" = "downloadOnly" ] || [ "$COMMAND" = "download" ]
+then
+    FILE=$2
+    if ! [ -f "$FILE" ]
+    then
+        ExitWithError "File '$FILE' does not exist or is not specified"
+    fi
+
+    SetTargetIP $3
+
+    CMD_LOG=$(mktemp "/tmp/tmp.fwupdate-XXXXX")
+
+    cat "$FILE" | SshToTarget "$BIN_PATH/fwupdate $COMMAND -" | tee ${CMD_LOG}
+    CMD_RET=${PIPESTATUS[1]}
+
+    if [ $CMD_RET -ne 0 ] && [ "$COMMAND" = "download" ]; then
+        # Command failed, but it might be caused by the SSH connection
+        # being interrupted by the reboot.
+        if grep -q "Installing & Reboot" ${CMD_LOG} \
+            && ! grep -q "Error during installation:" ${CMD_LOG}; then
+            echo "Connection interrupted, target is likely rebooting."
+            # Overriding the return code since we are confident that this is a normal use
+            # case.
+            CMD_RET=0
+        fi
+    fi
+
+    rm -f "$CMD_LOG"
+    exit $CMD_RET
+fi
+
+ExitWithError "Command '$COMMAND' unknown."

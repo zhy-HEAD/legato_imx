@@ -1,0 +1,21 @@
+
+executables:
+{
+    avcDataApp = ( componentDataApp )
+}
+
+processes:
+{
+    run:
+    {
+        (avcDataApp)
+    }
+}
+
+bindings:
+{
+    avcDataApp.componentDataApp.le_avdata -> avcService.le_avdata
+    avcDataApp.componentDataApp.le_avc -> avcService.le_avc
+}
+
+version: 4.4.4

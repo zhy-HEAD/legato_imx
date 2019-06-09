@@ -1,0 +1,1026 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+. "$(dirname "${BASH_SOURCE[0]}")/framework/tools/scripts/shlib"
+
+help_usage=(
+"CMD <ARGS>"
+)
+
+help_short_desc="Build and run Legato unit-tests"
+
+help_long_description=(
+"$help_short_desc"
+""
+"CMD must be one of the following options:"
+" - host-ut:"
+"       build and run unit-tests on the local machine."
+"       Uses 'tests_localhost' make target."
+"       No extra arguments are needed."
+"       Env. variable UT_FILTER can be used to select the tests being ran."
+"       Test cases that do not match this regular expression are excluded."
+"       e.g.:"
+"           UT_FILTER=\".*SecStore.*\" ./run-tests host-ut"
+"       would only run test cases that contains 'SecStore'."
+""
+" - run-host-ut:"
+"       use an existing build to execute the 'running' part of 'host-ut'."
+""
+" - target-ut:"
+"       build and run unit-tests for a specific target."
+"       Uses the 'tests_<target>' make target (e.g.: 'tests_wp76xx' or 'tests_wp85')."
+"       The following env. variables must be set before running this script:"
+"       - DEST_IP: IP of the device to test"
+"       - TARGET_TYPE: Type of the device to test (e.g.: 'wp76xx' or 'wp85')"
+""
+" - run-target-ut:"
+"       use an existing build to execute the 'running' part of 'target-ut'."
+""
+" - virt-(x86|arm)-target-ut:"
+"       similar to target-ut, but instantiate and run tests on a Qemu-based virtual x86 or ARM"
+"       platform in a Docker environment."
+"       DEST_IP and TARGET_TYPE variables are not necessary."
+""
+" - run-virt-(x86|arm)-target-ut:"
+"       use an existing build to execute the 'running' part of 'virt-(x86|arm)-target-ut'."
+""
+" - target-clean-coverage:"
+"       removes code coverage data stored on a target."
+"       IP must be provided as parameter, e.g.:"
+"        ./run-tests target-clean-coverage 192.168.2.2"
+""
+" - target-get-coverage:"
+"       fetches code coverage data stored on a target."
+"       Target type and IP must be provided as parameters."
+"       Coverage data is stored in build/\$target_type/coverage/raw/"
+"       e.g.:"
+"        ./run-tests target-get-coverage wp76xx 192.168.2.2"
+"       retrieves coverage data from the device and stores it in"
+"       'build/wp76xx/coverage/raw/'."
+""
+" - report-coverage:"
+"       generates code coverage report."
+"       Target type must be provided as parameter, e.g.:"
+"        ./run-tests report-coverage wp76xx"
+"       generates a report in build/wp76xx/coverage/html/ using"
+"       data stored in build/wp76xx/coverage/raw/."
+""
+" - dev-trial-(x86|arm):"
+"       build and run unit-tests for localhost' and 'virt-(x86|arm)' targets."
+""
+" - quick-test:"
+"       quick check, at the moment an alias to 'host-ut'."
+)
+
+SOURCEDIR=$PWD
+BUILDDIR_BASE=$PWD/build
+TEST_COVERAGE=${TEST_COVERAGE:-1}
+KEEP_COVERAGE=${KEEP_COVERAGE:-0}
+TEST_COVERAGE_DIR=${TEST_COVERAGE_DIR:-/mnt/flash/coverage}
+WITH_COLORS=${WITH_COLORS:-true}
+TARGET_SSH_PORT=${TARGET_SSH_PORT:-22}
+
+if [[ "$WITH_COLORS" == "true" ]]; then
+    COLOR_INFO="\033[1;36m"
+    COLOR_ERROR="\033[1;31m"
+    COLOR_WARN="\033[1;93m"
+    COLOR_RESET="\033[0m"
+    COLOR_PASS="\033[1;32m"
+fi
+
+# This allows to build commands such as 'if <cmd> | <cmd>'
+# without having to check the exit status of each sub-commands.
+set -o pipefail
+
+function message {
+    local color=$1
+    shift
+    echo $ECHO_ARGS -e $color $* $COLOR_RESET
+}
+
+function DoTestCleanup()
+{
+    StopDaemons
+    StopVirtualTarget
+}
+
+function Exit()
+{
+    DoTestCleanup
+    exit $1
+}
+
+function Abort()
+{
+    message $COLOR_WARN "Aborting ..."
+    Exit 1
+}
+
+trap 'Abort' INT
+
+function CheckRet()
+{
+    RETVAL=$?
+    if [ $RETVAL -ne 0 ]; then
+        message $COLOR_ERROR "Exit Code $RETVAL"
+        Exit $RETVAL
+    fi
+}
+
+function CheckSshHost {
+    local ssh_host=$1
+    local ssh_port=$2
+
+    host_ENTRY="$ssh_host"
+    if [[ "$ssh_port" != "22" ]]; then
+        host_ENTRY="[$ssh_host]:$ssh_port"
+    fi
+
+    known_ENTRY=$(ssh-keygen -F $host_ENTRY | grep -v '#')
+
+    ssh_ENTRY=$(ssh-keyscan -p $ssh_port -t rsa $ssh_host 2>/dev/null)
+    if [ -z "$ssh_ENTRY" ]; then
+        echo "Unable to find RSA host key for $host_ENTRY"
+        return 1
+    fi
+
+    ssh_KEY=$(echo $ssh_ENTRY | awk '{print $3}')
+
+    # Rebuild entry because port is not specified in some versions of ssh-keyscan
+    ssh_ENTRY="$host_ENTRY ssh-rsa $ssh_KEY"
+
+    if [ -z "$known_ENTRY" ]; then
+        message $COLOR_WARN "Host '$ssh_host' ($ssh_port) is not known, adding new key"
+        if ! [ -e "$HOME/.ssh/known_hosts" ]; then
+            mkdir -p "$HOME/.ssh"
+            touch "$HOME/.ssh/known_hosts"
+        fi
+        echo "$ssh_ENTRY" >> "$HOME/.ssh/known_hosts"
+        ssh-keygen -H
+    else
+        # Host is known
+        known_LINE=$(echo $known_ENTRY | sed -e 's/\([0-9]*\):.*/\1/g')
+        known_KEY=$(echo $known_ENTRY | awk '{print $3}' | head -1)
+
+        message $COLOR_WARN "Host '$ssh_host' ($ssh_port) is known"
+
+        if ! [[ "$known_KEY" == "$ssh_KEY" ]]; then
+            message $COLOR_WARN "Replacing key for '$ssh_host' ($ssh_port)"
+
+            # Remove existing entry
+            ssh-keygen -R $host_ENTRY
+
+            # Add new key
+            echo "$ssh_ENTRY" >> "$HOME/.ssh/known_hosts"
+            ssh-keygen -H
+        fi
+    fi
+}
+
+function CheckSsh {
+    local ssh_host=$1
+    local ssh_port=${2:-22}
+
+    ssh_host=$(echo $ssh_host | tr '[:upper:]' '[:lower:]')
+    local ssh_ip=$(getent hosts $ssh_host | head -1 | awk '{print $1}')
+
+    CheckSshHost $ssh_host $ssh_port
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
+    if [ -z "$ssh_ip" ] || [[ "$ssh_host" == "$ssh_ip" ]]; then
+        return 0
+    fi
+
+    CheckSshHost $ssh_ip $ssh_port
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+}
+
+function StartServiceDirectory()
+{
+    message $COLOR_INFO "Starting Service Directory..."
+    serviceDirectory &
+    SERVICE_DIRECTORY_PID=$!
+    sleep 0.5
+    message $COLOR_PASS "DONE"
+}
+
+function StopServiceDirectory()
+{
+    ECHO_ARGS='-n' message $COLOR_INFO "Stopping Service Directory..."
+    kill $SERVICE_DIRECTORY_PID > /dev/null 2>&1
+    message $COLOR_PASS "DONE"
+}
+
+function CheckServiceDirectory()
+{
+    if ! kill -0 $SERVICE_DIRECTORY_PID > /dev/null 2>&1
+    then
+        message $COLOR_WARN "Service Directory is no longer running!"
+        Exit 1
+    fi
+}
+
+function StartLogControlDaemon()
+{
+    message $COLOR_INFO "Starting Log Control Daemon..."
+    logCtrlDaemon &
+    LOG_CTRL_DAEMON_PID=$!
+    sleep 0.5
+    message $COLOR_PASS "DONE"
+}
+
+function StopLogControlDaemon()
+{
+    ECHO_ARGS='-n' message $COLOR_INFO "Stopping Log Control Daemon..."
+    kill $LOG_CTRL_DAEMON_PID > /dev/null 2>&1
+    sleep 0.5
+    message $COLOR_PASS "DONE"
+}
+
+function CheckLogControlDaemon()
+{
+    if ! kill -0 $LOG_CTRL_DAEMON_PID > /dev/null 2>&1
+    then
+        message $COLOR_WARN "Log Control Daemon is no longer running!"
+        Exit 1
+    fi
+}
+
+function StartConfigTree()
+{
+    message $COLOR_INFO "Starting Configuration Tree..."
+    configTree &
+    CONFIG_TREE_PID=$!
+    sleep 0.5
+    message $COLOR_PASS " DONE."
+}
+
+function StopConfigTree()
+{
+    ECHO_ARGS='-n' message $COLOR_INFO "Stopping Configuration Tree..."
+    kill $CONFIG_TREE_PID > /dev/null 2>&1
+    message $COLOR_PASS " DONE."
+}
+
+function CheckConfigTree()
+{
+    if ! kill -0 $CONFIG_TREE_PID > /dev/null 2>&1
+    then
+        message $COLOR_WARN "Config Tree is no longer running!"
+        Exit 1
+    fi
+}
+
+function StartDaemons()
+{
+    StartServiceDirectory
+    StartLogControlDaemon
+    StartConfigTree
+}
+
+function StopDaemons()
+{
+    if [[ "$TARGET_TYPE" != "localhost" ]]; then
+        return
+    fi
+
+    StopLogControlDaemon
+    StopServiceDirectory
+    StopConfigTree
+}
+
+function CheckDaemons()
+{
+    CheckLogControlDaemon
+    CheckServiceDirectory
+    CheckConfigTree
+}
+
+# Wait for SSH to be available
+function WaitSsh()
+{
+    for (( i=0; i<10; i++ )); do
+        echo "Trying $DEST_IP:22 ..."
+        KEY=$(ssh-keyscan -p 22 -t rsa $DEST_IP)
+        if [ -n "$KEY" ]; then
+            return 0
+        fi
+
+        sleep 15
+    done
+
+    return 1
+}
+
+function StartVirtualTarget()
+{
+    # Figure out most recent Legato release included in this source, and use virtual image
+    # based on this release.
+    LATEST_TAG=$(git describe --tags $(git merge-base HEAD remotes/gerrit/master) |cut -d- -f1)
+    VIRT_TARGET_TAG=${VIRT_TARGET_TAG:-${LATEST_TAG}}
+    # By default, use ARM target architecture
+    VIRT_TARGET_ARCH=${VIRT_TARGET_ARCH:-x86}
+    # Build up docker image name from above.  Can also be overridden by setting VIRT_DOCKER_IMG
+    VIRT_DOCKER_IMG=${VIRT_DOCKER_IMG:-"quay.io/legato/virt-$VIRT_TARGET_ARCH:$VIRT_TARGET_TAG"}
+
+    if ! which docker >/dev/null; then
+        message $COLOR_ERROR "Unable to find 'docker', unable to executed virtual tests."
+        echo "See https://docs.docker.com/engine/installation/ for installation instructions."
+        Exit 1
+    fi
+
+    if [ -z "$VIRT_SKIP_PULL" ] && [[ "$VIRT_DOCKER_IMG" != sha256* ]]; then
+        message $COLOR_INFO "Downloading virtual target image ..."
+        docker pull $VIRT_DOCKER_IMG
+        CheckRet
+    fi
+
+    # If available, use the partition built locally
+    local volume_opt
+    if [ -e "$SOURCEDIR/build/virt-${VIRT_TARGET_ARCH}/legato.squashfs" ]; then
+        volume_opt="--volume=$SOURCEDIR/build/virt-${VIRT_TARGET_ARCH}/legato.squashfs:/legato/legato.squashfs"
+    fi
+
+    VIRT_CNT_NAME="virt-$(date +%Y%d%m-%H%M%S)"
+
+    # If available, use the partition built locally
+    local volume_opt
+    if [ -e "$SOURCEDIR/build/virt-${VIRT_TARGET_ARCH}/legato.squashfs" ]; then
+        volume_opt="--volume=$SOURCEDIR/build/virt-${VIRT_TARGET_ARCH}/legato.squashfs:/legato/legato.squashfs"
+    fi
+
+    message $COLOR_INFO "Starting virtual target ..."
+
+    docker run \
+                --detach \
+                --name=$VIRT_CNT_NAME \
+                $volume_opt \
+                $VIRT_DOCKER_IMG
+    CheckRet
+
+    # Wait up to 1 minute for the image to have an IP
+    for (( i=0; i<4; i++ )); do
+        DEST_IP=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $VIRT_CNT_NAME)
+        if [ -n "$DEST_IP" ]; then
+            break
+        fi
+
+        sleep 15
+    done
+
+    echo "Virtual target[$VIRT_TARGET_ARCH]: IP[$DEST_IP] Container[$VIRT_CNT_NAME]"
+
+    WaitSsh
+    CheckRet
+
+    CheckSsh $DEST_IP
+    CheckRet
+
+    export DEST_IP VIRT_TARGET_ARCH
+}
+
+function StopVirtualTarget()
+{
+    if [ -n "$VIRT_CNT_NAME" ]; then
+        docker rm -f $VIRT_CNT_NAME
+    fi
+}
+
+function CleanBuild()
+{
+    make clean
+}
+
+function TargetIdentify()
+{
+    if [ -z "$TARGET_TYPE" ]; then
+        echo "Identifying target '$DEST_IP' ..."
+        TARGET_MODEL=$(ssh -o ConnectTimeout=5 -p $TARGET_SSH_PORT root@$DEST_IP "bsinfo -l | grep \" - \$(bsinfo -s -t)\" | sed -e 's/BS//' -e 's/ - .*$//'" 2> /dev/null)
+        if [ -z "$TARGET_MODEL" ]; then
+            echo "Unable to determine remote target model"
+            Exit 1
+        fi
+
+        TARGET_TYPE=$($SOURCEDIR/bin/gettargettype ${TARGET_MODEL})
+        if [ -z "$TARGET_TYPE" ]; then
+            echo "Unsupported remote model '$TARGET_TYPE'"
+            Exit 1
+        fi
+    fi
+
+    message $COLOR_INFO "Testing Legato on $DEST_IP (type = $TARGET_TYPE)"
+}
+
+function TargetUpdateMarkGood()
+{
+    message $COLOR_INFO "-> marking good"
+    for (( i=0; i<10; i++ )); do
+        echo "waiting ..."
+        if timeout 15 ssh -p $TARGET_SSH_PORT root@$DEST_IP "/legato/systems/current/bin/update --mark-good" > build/$TARGET_TYPE/target.log 2>&1; then
+            return 0
+        fi
+
+        if grep -q "The probation period has already ended" build/$TARGET_TYPE/target.log; then
+            return 0
+        fi
+
+        sleep 15
+    done
+
+    return 1
+}
+
+function TargetUpdateLegato()
+{
+    if [ -n "$1" ]; then
+        test_system="$1"
+    else
+        test_system=build/$TARGET_TYPE/system.$TARGET_TYPE.update
+    fi
+
+    if [ ! -f "${test_system}" ]; then
+        message $COLOR_INFO "No tests found for ${test_system}, skipping"
+        return 0
+    fi
+
+    message $COLOR_INFO "Updating Legato with system '$test_system'"
+
+    # If startup scripts are updated target will need to reboot.
+    instsys $test_system $DEST_IP
+    CheckRet
+
+    # Wait for target to bring up the new system.
+    sleep 30
+
+    # Mark good
+    TargetUpdateMarkGood
+    if [ $? -ne 0 ]; then
+        message $COLOR_WARN "Unable to mark system as good ..."
+    fi
+
+    # Wait for system to be marked good
+    message $COLOR_INFO "-> checking status"
+    for (( i=0; i<10; i++ )); do
+        echo "waiting ..."
+        if timeout 15 ssh -p $TARGET_SSH_PORT root@$DEST_IP "/legato/systems/current/bin/legato status | grep current | grep good"; then
+            return 0
+        fi
+
+        sleep 15
+    done
+
+    message $COLOR_ERROR "Timeout !"
+    Exit 1
+}
+
+function TargetCleanCoverage()
+{
+    local target_ip=$1
+
+    ssh root@$target_ip "rm -rf $TEST_COVERAGE_DIR"
+    CheckRet
+}
+
+# Transfer coverage results stored on the target to the test host
+function TargetRetrieveCoverage()
+{
+    local target_type=$1
+    local target_ip=$2
+
+    message $COLOR_INFO "Getting code coverage from target $target_ip"
+
+    cd $SOURCEDIR
+
+    rm -rf build/$target_type/coverage/raw/
+    mkdir -p build/$target_type/coverage/raw/
+
+    # Restart legato to make sure that coverage has been saved
+    ssh root@$target_ip "/legato/systems/current/bin/legato restart"
+
+    # Transfer
+    if ! ssh -p $TARGET_SSH_PORT root@$target_ip "cd $TEST_COVERAGE_DIR && tar -cf - *" | tar x -C build/$target_type/coverage/raw/; then
+        message $COLOR_WARN "Unable to transfer coverage files from $TEST_COVERAGE_DIR"
+    fi
+
+    for d in $(find build/$target_type/coverage/raw -wholename "*/build/$target_type"); do
+        rsync -a $d/ build/$target_type/
+        CheckRet
+    done
+}
+
+function Job_TargetCleanCoverage()
+{
+    local target_ip=$2
+
+    if [ -z "$target_ip" ]; then
+        echo "Usage: $0 $1 <target IP>"
+        exit 1
+    fi
+
+    CheckSsh $target_ip
+    CheckRet
+
+    TargetCleanCoverage $target_ip
+}
+
+function Job_TargetRetrieveCoverage()
+{
+    local target_type=$2
+    local target_ip=$3
+
+    if [ -z "$target_type" ] || [ -z "$target_ip" ]; then
+        echo "Usage: $0 $1 <target type> <target IP>"
+        exit 1
+    fi
+
+    CheckSsh $target_ip
+    CheckRet
+
+    TargetRetrieveCoverage $target_type $target_ip
+}
+
+function ExecTargetPyTest()
+{
+    local update_file="$1"
+    local pytest_name="$2"
+
+    TargetUpdateLegato "${update_file}"
+    if [ $? -ne 0 ]; then
+        message $COLOR_ERROR "Unable to update with '${update_file}'"
+        return 1
+    fi
+
+    py.test --junitxml="build/$TARGET_TYPE/tests/results/$(echo ${pytest_name} | tr '/' '_').xml" \
+            --target=$DEST_IP \
+            "${pytest_name}"
+    if [ $? -ne 0 ]; then
+        message $COLOR_ERROR "'${pytest_name}' tests failed"
+        return 1
+    fi
+}
+
+
+function TargetUnitTest()
+{
+    local tests_ret=0
+
+    if [ -z "$DEST_IP" ]; then
+        echo "Target IP address (DEST_IP) is not available. Unit testing on target will be skipped."
+        return
+    fi
+
+    if [[ "$TEST_COVERAGE" == "1" ]]; then
+        TargetCleanCoverage $DEST_IP
+    fi
+
+    # 1) perform Python-based framework tests
+    ExecTargetPyTest "build/$TARGET_TYPE/testFramework.$TARGET_TYPE.update" "framework"
+    if [ $? -ne 0 ]; then
+        tests_ret=1
+    fi
+
+    # 2) perform Python-based component tests
+    ExecTargetPyTest "build/$TARGET_TYPE/testComponents.$TARGET_TYPE.update" "components"
+    if [ $? -ne 0 ]; then
+        tests_ret=1
+    fi
+
+    # 3) perform Python-based application and framework daemon tests
+    ExecTargetPyTest "build/$TARGET_TYPE/testApps.$TARGET_TYPE.update" "apps/test"
+    if [ $? -ne 0 ]; then
+        tests_ret=1
+    fi
+
+    # Then perform old bash-script tests.
+    # NOTE: As these tests are updated they should be converted to python-based tests,
+    #       Once all tests are converted, this should be removed
+    TargetUpdateLegato
+    if [ $? -ne 0 ]; then
+        message $COLOR_ERROR "Unable to update"
+        tests_ret=1
+    else
+        cd $BUILDDIR_BASE/$TARGET_TYPE
+        CheckRet
+
+        # Test
+        $SOURCEDIR/apps/test/targetUnitTests $DEST_IP $TARGET_TYPE
+        if [ $? -ne 0 ]; then
+            message $COLOR_ERROR "targetUnitTests failed"
+            tests_ret=1
+        fi
+    fi
+
+    if [[ "$TEST_COVERAGE" == "1" ]]; then
+        TargetRetrieveCoverage "$TARGET_TYPE" "$DEST_IP"
+    fi
+
+    if [ $tests_ret -ne 0 ]; then
+        message $COLOR_ERROR "Target tests failed"
+    else
+        message $COLOR_PASS "Target tests OK"
+    fi
+
+    cd $SOURCEDIR
+    CheckRet
+
+    return $tests_ret
+}
+
+function ConvertCTestIntoJUnit()
+{
+    local tests_dir=${1:-$BUILDDIR_BASE/localhost/Testing}
+    local xml_output=${2:-$BUILDDIR_BASE/localhost/tests/unitTestResults.xml}
+
+    if ! [ -x "$(command -v xsltproc)" ]; then
+      message $COLOR_ERROR 'xsltproc is not installed. Please install it with:'
+      message $COLOR_WARN '\tsudo apt-get install xsltproc'
+      exit 1
+    fi
+
+    for file in ${tests_dir}/*/Test.xml; do
+
+        local file_dir=$(dirname ${file})
+
+        # Convert ctest result into junit xml
+        xsltproc --output ${file_dir}/updates.xml $SOURCEDIR/framework/tools/ressources/ctest-to-junit.xsl ${file}
+
+        if [ ! -e ${xml_output} ]; then
+            cp ${file_dir}/updates.xml ${xml_output}
+        else
+            # Fusion with previous updates.xml
+            cp ${xml_output} ${file_dir}/previous.xml
+            xsltproc --output ${file_dir}/fusion.xml \
+                        --stringparam updateFile ${file_dir}/updates.xml \
+                        $SOURCEDIR/framework/tools/ressources/fusion-junit.xsl \
+                        ${file_dir}/previous.xml
+            cp  ${file_dir}/fusion.xml ${xml_output}
+        fi
+
+    done
+}
+
+function CheckXmlResult()
+{
+    local xml_file=${1:-$BUILDDIR_BASE/localhost/tests/unitTestResults.xml}
+
+    if ! [ -x "$(command -v xmllint)" ]; then
+      message $COLOR_ERROR 'xmllint is not installed. Please install it with:'
+      message $COLOR_WARN '\tsudo apt-get install libxml2-utils'
+      exit 1
+    fi
+
+    if [[ $(xmllint --xpath 'string(//testsuites/testsuite[1]/@failures)' $xml_file) == '0' ]]; then
+        message $COLOR_PASS "Test passed first time"
+        return 0
+    fi
+
+    if [[ $(xmllint --xpath 'string(//testsuites/testsuite[last()]/@failures)' $xml_file) == '0' ]]; then
+        message $COLOR_WARN "Test initially failed, then passed on retry"
+        return 0
+    fi
+
+    message $COLOR_ERROR "Test always failed"
+    return 0
+}
+
+function HostUnitTest()
+{
+    # Default timeout to 2 minutes
+    #
+    # NOTE: Tests can eventually override this timeout using
+    #  add_test(MyTest1 ....)
+    #  set_tests_properties(MyTest1 PROPERTIES TIMEOUT 100)
+    UT_TIMEOUT=${UT_TIMEOUT:-120}
+
+    # Default to run all test cases
+    UT_FILTER=${UT_FILTER:-".*"}
+
+    # Define number of retry when a test is failling
+    UT_RETRY=${UT_RETRY:-1}
+
+    # Define if we run the all campaign or just tests that have failed
+    UT_RETRY_ALL=${UT_RETRY_ALL:-true}
+
+    cd $BUILDDIR_BASE/localhost
+    CheckRet
+
+    export PATH=$PWD/framework/bin:$PWD/tests/bin:$PATH
+
+    # Stop any other instances of the legato framework daemons that may already be running.
+    # NOTE: Killing the Service Directory should be sufficient to cause everything else to die too.
+    serviceDirProcIDs=`pgrep serviceDir`
+    if [ $? -eq 0 ]
+    then
+        for procID in $serviceDirProcIDs
+        do
+            echo "*** Killing Service Directory process with PID $procID"
+            kill $procID
+        done
+    fi
+
+    StartDaemons
+
+    CheckDaemons
+
+    local test_option="--tests-regex $UT_FILTER"
+
+    for loop in $(seq 1 $UT_RETRY); do
+
+        message $COLOR_ERROR "Run ${loop}"
+
+        if [[ $loop != "1" && ${UT_RETRY_ALL} == "false" ]]; then
+            test_option="--rerun-failed"
+        fi
+
+        # Test
+        ctest \
+            -D ExperimentalTest \
+            --no-compress-output \
+            --timeout $UT_TIMEOUT \
+            ${test_option} \
+            -O $BUILDDIR_BASE/localhost/tests/testRun_${loop}.log \
+            -VV
+        test_ret=$?
+
+        ConvertCTestIntoJUnit
+
+        if [ $test_ret -eq 0 ]; then
+            break
+        fi
+
+    done
+
+    CheckXmlResult
+
+    CheckDaemons
+
+    StopDaemons
+
+    cd $SOURCEDIR
+    CheckRet
+
+    return $test_ret
+}
+
+function Build()
+{
+    local target=$1
+
+    local builddir="$BUILDDIR_BASE/$target"
+
+    message "Building $target with code coverage report set to $TEST_COVERAGE"
+
+    # Check Toolchain path
+    # NOTE: Even if the toolchain path is not set, the Makefile should be able to recover.
+    if [[ "$target" != "localhost" ]]; then
+        local toolchain_env="${target^^}_TOOLCHAIN_DIR"
+        toolchain_env=${toolchain_env/-/_}
+        if [ -z "${!toolchain_env}" ]; then
+            message $COLOR_WARN "$toolchain_env not set!"
+        else
+            echo "$toolchain_env=${!toolchain_env}"
+        fi
+    fi
+
+    # Build
+    make tests_$target TEST_COVERAGE=$TEST_COVERAGE
+    CheckRet
+
+    source $SOURCEDIR/bin/configlegatoenv
+}
+
+function BuildTools()
+{
+    echo "Building Tools"
+
+    make tools
+    CheckRet
+}
+
+function BuildClang()
+{
+    if ! which clang; then
+        echo "Unable to find clang"
+        Exit 1
+    fi
+
+    echo "  Clang version:"
+    clang -v 2>&1 |head -1
+
+    # Normal build, with clang
+    export USE_CLANG=1
+    Build "localhost"
+    unset USE_CLANG
+    CleanBuild
+}
+
+function Job_HostUnitTest()
+{
+    local clean=${1:-true}
+
+    if [ -n "$SKIP_HOST_TESTING" ]; then
+        echo "Skipping host unit tests."
+        return
+    fi
+
+    export TARGET_TYPE=localhost
+
+    if $clean; then
+        CleanBuild
+        Build $TARGET_TYPE
+    fi
+    HostUnitTest
+    local test_ret=$?
+
+    GenerateReport $TARGET_TYPE
+
+    Exit $test_ret
+}
+
+function Job_TargetUnitTest()
+{
+    local clean=${1:-true}
+
+    if [ -n "$SKIP_TARGET_TESTING" ]; then
+        echo "Skipping on-target unit tests."
+        return
+    fi
+
+    TargetIdentify
+    if $clean; then
+        CleanBuild
+        Build $TARGET_TYPE
+    fi
+    TargetUnitTest
+    local test_ret=$?
+
+    GenerateReport $TARGET_TYPE
+
+    Exit $test_ret
+}
+
+function GetVirtArch()
+{
+    local arch=${VIRT_TARGET_ARCH:-x86}
+    case "${1}" in
+        *-x86*) arch=x86 ;;
+        *-arm*) arch=arm ;;
+        *virt-target-ut | dev-trial)
+            message $COLOR_WARN "WARNING: Specifying virtual target with VIRT_TARGET_ARCH is deprecated." 1>&2
+            ;;
+    esac
+    echo "${arch}"
+}
+
+function Job_VirtualTargetUnitTest()
+{
+    local clean=${1:-true}
+    local arch=${2:-x86}
+
+    if [ -n "$SKIP_TARGET_TESTING" ]; then
+        echo "Skipping on-target unit tests."
+        return
+    fi
+
+    export TARGET_TYPE=virt-${arch}
+    export VIRT_TARGET_ARCH=${arch}
+
+    if $clean; then
+        CleanBuild
+        Build $TARGET_TYPE
+    fi
+    StartVirtualTarget
+    TargetUnitTest
+    local test_ret=$?
+
+    GenerateReport $TARGET_TYPE
+
+    Exit $test_ret
+}
+
+function Manual_DeveloperPrePushTrial()
+{
+    local virt_arch="${1:-arm}"
+
+    message $COLOR_INFO "Cleaning ..."
+    CleanBuild
+
+    message $COLOR_INFO "Building ..."
+    Build "localhost"
+
+    message $COLOR_INFO "Building for virtual target ..."
+    Build "virt-${virt_arch}"
+
+    message $COLOR_INFO "Testing host UTs ..."
+    Job_HostUnitTest false
+
+    message $COLOR_INFO "Testing virtual target UTs ..."
+    Job_VirtualTargetUnitTest false "${virt_arch}"
+
+    message $COLOR_PASS "Tests complete"
+}
+
+function GenerateReport()
+{
+    local target=$1
+
+    local builddir="$BUILDDIR_BASE/$target"
+
+    if [[ "$TEST_COVERAGE" == "1" ]]; then
+        message $COLOR_INFO "Generating report for $target ..."
+
+        local keep=
+        if [[ "$KEEP_COVERAGE" == "1" ]]; then
+            local keep=--keep
+        fi
+
+        cd $SOURCEDIR
+
+        # Build
+        gcovr --xml \
+              --root . \
+              $keep \
+              --output $builddir/coverage.xml \
+              --exclude ".*(test|build|codegen)\b.*"
+        CheckRet
+
+        mkdir -p $builddir/coverage/html/
+        gcovr --html \
+              --html-details \
+              --root . \
+              $keep \
+              --output $builddir/coverage/html/index.html \
+              --exclude ".*(test|build|codegen)\b.*"
+        CheckRet
+    fi
+}
+
+function Job_GenerateReport()
+{
+    local target=$2
+
+    if [ -z "$target" ]; then
+        echo "Usage: $0 $1 <target>"
+        exit 1
+    fi
+
+    GenerateReport $target
+}
+
+CheckForHelp $1
+
+if [ -z "$1" ]; then
+    PrintAvailableUsage
+    exit 1
+fi
+
+message $COLOR_INFO "== Task: '$1' ==\n"
+
+if [ -e "$SOURCEDIR/bin/configlegatoenv" ]; then
+    source $SOURCEDIR/bin/configlegatoenv
+fi
+
+case "$1" in
+host-ut | quick-test)
+    Job_HostUnitTest true
+    ;;
+run-host-ut)
+    Job_HostUnitTest false
+    ;;
+target-ut)
+    Job_TargetUnitTest true
+    ;;
+run-target-ut)
+    Job_TargetUnitTest false
+    ;;
+virt*-target-ut)
+    Job_VirtualTargetUnitTest true "$(GetVirtArch "${1}")"
+    ;;
+run-virt*-target-ut)
+    Job_VirtualTargetUnitTest false "$(GetVirtArch "${1}")"
+    ;;
+target-clean-coverage)
+    Job_TargetCleanCoverage $@
+    ;;
+target-get-coverage)
+    Job_TargetRetrieveCoverage $@
+    ;;
+report-coverage)
+    Job_GenerateReport $@
+    ;;
+dev-trial*)
+    Manual_DeveloperPrePushTrial "$(GetVirtArch "${1}")"
+    ;;
+*)
+    echo "Invalid argument: '$1'" >&2
+    exit 1
+    ;;
+esac
+
+Exit 0

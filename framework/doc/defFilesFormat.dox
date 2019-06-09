@@ -1,0 +1,251 @@
+/** @page defFilesFormat Common File Format
+
+All of the definition files have the same format. They're divided into sections.  Each section type
+has a set of permitted content, which could be simple, numerical or text values, named items, or
+other sections (subsections).
+
+
+@section defFileFormatSections Sections
+
+A section always starts with a section name followed by a colon (':').
+
+@code
+faultAction: restart
+
+maxFileSystemBytes: 200K
+@endcode
+
+Sections that can have multiple content items always have curly braces around their content.
+
+@code
+sources:
+{
+    helloWorld.c
+    myClass.cpp
+}
+@endcode
+
+All sections are optional; they can be empty or omitted.
+
+Sections can be in any order, multiple occurrences are permitted, and some sections have
+sub-sections.
+
+@code
+requires:
+{
+    file:
+    {
+        /dev/ttyS0  /dev/uart
+    }
+
+    file:
+    {
+        /tmp/foo  /tmp/
+    }
+
+    dir:
+    {
+    }
+}
+@endcode
+
+
+@section defFileFormatNamedItems Named Items
+
+A named item always begins with the item name followed by an equals sign ('=').
+
+@code
+myPool = 45
+@endcode
+
+If a named item can have multiple content items, then it must have curly braces around its content.
+
+@code
+myExe = { myComponent otherComponent }
+@endcode
+
+
+@section defFileFormatNumberValues Numerical Values
+
+Integers are required in some sections.
+
+@code
+maxFileDescriptors: 100
+@endcode
+
+Numbers can be expressed in multiples of 1024 by adding the 'K' suffix.
+
+@code
+maxFileSystemBytes: 120K
+@endcode
+
+
+@section defFileFormatTextValues Text Values
+
+Some sections contain text-based values.  The format of these varies depending on the type of
+section.
+
+
+@section defFileFormatUsingEnvVarsIn Environment Variables
+
+It's possible to use environment variables inside of <c>.sdef</c>, <c>.adef</c>, and
+<c>Component.cdef</c> files.
+
+This works the same way as in shell scripts, by prefixing the environment variable name with
+a dollar sign ($):
+
+@code
+requires:
+{
+    api:
+    {
+        $BUILD_ROOT/interfaces/httpdCtrl.api
+    }
+}
+@endcode
+
+If necessary, the variable name can also be enclosed in curly braces.
+
+@code
+requires:
+{
+    api:
+    {
+        ${PRODUCT_FAMILY}_interfaces/httpdCtrl.api
+    }
+}
+@endcode
+
+A double dollar sign ('$$') is replaced by a dollar sign ('$').
+
+Furthermore, the mk tools will create some environment variables:
+
+ - @c LEGATO_ROOT = path to where the Legato framework sources are located
+ - @c LEGATO_TARGET = build target (e.g., wp85, localhost)
+ - @c LEGATO_BUILD = shorthand for <c>$LEGATO_ROOT/build/$TARGET</c>
+ - @c LEGATO_SYSROOT = path of the directory containing the target device's system files
+ - @c CURDIR = path of the directory containing the definition file being parsed
+ - @c BUILDDIR = path of the generated files for system, app, component or module
+ - @c CC = path to the C compiler
+ - @c CXX = path to the C++ compiler
+ - @c LD = path to the linker
+ - @c AR = path to the archiver to be used to generate static libraries
+ - @c AS = path to the assembler to be used if assembly code source files are found
+ - @c STRIP = path to the debug symbol stripper utility
+ - @c OBJCOPY = path to the object file copier/translator utility
+ - @c READELF = path to the ELF file information extractor utility
+
+
+@section defFileFormatIncludeDirectives Include Directives
+
+Definition file sections or parts of a section may be common between several related
+systems, applications or components.  For example, all systems built for a certain module may
+need the some common @c buildVars or @c cflags set, or a series of related products
+may all share a base set of apps.
+To reuse common parts of the definition file, these parts can be separated
+into a common file, which is then included in each definition file where it is needed.  This
+is done through include directives.
+
+Include directives consist of the word @c \#include followed by the name of the file to include.
+For example
+
+@code
+#include baseBuildVars.inc
+@endcode
+
+will be treated as if the contents of baseBuildVars.inc appeared at this point.  Multiple
+include directives can be used to include multiple files.
+
+When looking for a file to include, environment variables in the filename will be expanded first.
+If the filename is absolute, that file will be included.  If it is relative, first the directory
+containing the current file will be searched, followed by the
+@c ${LEGATO_ROOT} directory.
+
+@note If an environment variable is used in an include filename the value of that environment
+variable can't be changed in a later @c buildVars section.
+
+@section defFileFormatIfDirectives If Directives
+
+Some definition file sections or parts of sections may be needed only on certain targets, or
+in certain configurations.  To handle conditionals like this, definition files support the @c \#if,
+@c \#elif, @c \#else, and @c \#endif directives.  These function much like their C counterparts,
+allowing you to include or exclude certain sections of a Xdef file.
+
+If directives consist of an initial @c \#if directive, zero or more @c \#elif directives, optionally
+an @c \#else directive then a final @c \#endif directive marking the end of the conditional section.
+For example:
+
+@code
+#if ${INCLUDE_FEATURE} = 1
+    // Definitions to be used if INCLUDE_FEATURE is 1
+#elif dir_exists(apps/optional_app)
+    // Definitions to be used if INCLUDE_FEATURE is not 1 but apps/optional_app exists
+#else
+    // Definitions to be used if none of the above are true
+#endif
+@endcode
+
+Conditions which can be used with @c \#if directives are:
+
+ - <code>left_hand_side = right_hand_side</code>: Check if left_hand_side is equal to
+   right_hand_side after expanding environment variables.  Example uses are setting
+   different compiler flags depending on the target, or including certain apps only if a specific
+   feature is enabled.
+ - <code>dir_exists(dirpath)</code>: Checks if the directory @c dirpath exists.  Relative paths are
+   relative to the directory containing the file being processed.  Example uses include building a
+   component from source if the source is available, or using a pre-built binary module if not.
+ - <code>file_exists(filepath)</code>: Checks if the file @c filepath exists.  Relative paths are
+   relative to the directory containing the file being processed.  Uses are similar to
+   @c dir_exists.
+
+@note This feature is most commonly used in included files.  In a top level file it is usually
+easier to write a separate definition file for each configuration, or move target-specific
+portions into a target-specific include file.
+
+@section defFileFormatWhitespace Whitespace
+
+Tabs, spaces, new-lines, carriage-returns and comments act as token separators only, and are
+otherwise all ignored. Consequently, choice of indentation and spacing style is relatively
+unrestricted.
+
+
+@section defFileFormatComments Comments
+
+Comments can be included using
+@code
+ // C++-style one-line comments.
+
+ /* or
+    C-style multi-line comments. */
+@endcode
+
+@section defFileFormatSample Sample
+@code
+/* Component.cdef file for a hypothetical web server component that provides a control API
+ * (defined in httpdCtrl.api) that allows other apps to start and stop the web server via IPC.
+ */
+
+#include "targets/${LEGATO_TARGET}.def"
+
+bundles:
+{
+    // Include all the web pages from the build host in the application, and have them appear
+    // to the application under /var/www.
+    dir:
+    {
+        htdocs   /var/www
+    }
+}
+
+provides :     // Note that space is allowed between the section name and the colon.
+{
+    api:    {   httpdCtrl.api
+            }
+}
+
+sources: {httpd.c}
+@endcode
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

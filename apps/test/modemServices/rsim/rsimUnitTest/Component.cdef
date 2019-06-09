@@ -1,0 +1,14 @@
+requires:
+{
+    api:
+    {
+        modemServices/le_rsim.api       [types-only]
+    }
+}
+
+sources:
+{
+    main.c
+    ${LEGATO_ROOT}/components/modemServices/rSimDaemon/le_rsim.c
+    simu/components/le_pa_remotesim/pa_rsim_simu.c
+}

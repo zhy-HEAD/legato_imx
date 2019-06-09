@@ -1,0 +1,51 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+# This script determines a target type from a target model.
+
+# Exit codes
+# 0 - Success
+# 1 - General error
+
+help_short_desc="determine target type from target model"
+
+help_usage=(
+"TARGET_MODEL"
+)
+
+help_long_description=(
+)
+
+CheckForHelp $@
+
+TARGET_MODEL=$(echo $1 | tr '[:lower:]' '[:upper:]')
+
+case $TARGET_MODEL in
+    AR758*)
+        echo ar758x;;
+    AR759*)
+        echo ar759x;;
+    AR7*)
+        echo ar7;;
+    AR86*)
+        echo ar86;;
+    WP85*)
+        echo wp85;;
+    WP750*)
+        echo wp750x;;
+    WP76*)
+        echo wp76xx;;
+    WP77*)
+        echo wp77xx;;
+    VIRT*)
+        echo virt;;
+    *)
+        echo "Model '$TARGET_MODEL' not supported" 1>&2
+        exit 1
+        ;;
+esac
+

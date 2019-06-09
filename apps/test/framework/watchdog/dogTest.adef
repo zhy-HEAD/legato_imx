@@ -1,0 +1,17 @@
+start: manual
+
+watchdogTimeout: 5000
+watchdogAction: stop
+
+executables:
+{
+    dogTest = (dogTest)
+}
+
+processes:
+{
+    run:
+    {
+        (dogTest 500 100)
+    }
+}

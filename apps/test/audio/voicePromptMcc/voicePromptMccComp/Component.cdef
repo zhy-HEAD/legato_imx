@@ -1,0 +1,20 @@
+sources:
+{
+    voicePromptMcc.c
+}
+
+requires:
+{
+    api:
+    {
+        le_cfg.api
+        le_mdmDefs.api [types-only]
+        le_audio.api
+        le_mcc.api
+    }
+
+    lib:
+    {
+        opencore-amrnb
+    }
+}

@@ -1,0 +1,149 @@
+/** @page basicBuildLegato Install the Application Framework
+
+Use this guide to:
+- @ref basicBuild_prep "Setup a Workspace"
+- @ref basicBuildLegato_Download "Install the Legato Application Framework"
+- @ref basicBuildToolchain "Install a Toolchain"
+- @ref basicBuildMake "Make an initial build" and setup the Legato Application Framework
+  for a specific target
+
+@note This guide is not specific to a target device, please refer to your target documentation to
+set-up any hardware, additional software and download the toolchain for your target.
+
+@section basicBuild_prep Setup Workspace
+
+A development machine is used to write your custom applications and build, configure and install the
+runtime environment for your target.
+
+Requirements:
+Linux PC or Virtual Machine with:
+ - Ubuntu: A currently supported LTS Version installed
+ - CPU: Dual Hyper-threaded or Quad Core @ 2.8Ghz (Recommended)
+ - RAM: 6Gb
+ - Disk Space: 5Gb (2.5gb for the toolchain, and 2.5gb for the Framework and Workspace)
+
+The following Linux software needs to be installed on your dev machine to use the Legato Application
+Framework:
+
+@verbatim
+$ sudo apt-get install -y build-essential \
+                          python python-jinja2 python-pkg-resources python-git \
+                          cmake git libsdl-dev diffstat texinfo gawk chrpath \
+                          wget cpio bash ninja-build bc unzip libxml2-utils gcovr \
+                          libcurl4-gnutls-dev zlib1g-dev libbz2-dev \
+                          bsdiff libssl-dev autoconf automake iputils-ping \
+                          libtool flex bison gperf libncursesw5-dev libncurses5-dev
+@endverbatim
+
+@b Optional @b packages:
+ - @c openjdk-8-jdk (for Java support)
+ - @c doxygen and @c graphviz (for doc generation)
+ - [TLA toolbox](http://lamport.azurewebsites.net/tla/toolbox.html)
+   (Formal specification & verification).
+
+Now that you have the required Linux software we recommend setting up a directory structure that
+allows you to easily work with the Legato Application Framework tools from within your own projects.
+
+@note While we are suggesting the following structure as a recommendation there may be other
+directory structures that make more sense for your projects (e.g., if different projects depend on
+different Legato AF or firmware versions, it may make more sense to setup a copy of the firmware or
+Legato AF files within a project).
+
+<b>Example User Environment:</b>
+@image html basicBuildLegato_InstallOverview.png
+
+In your home directory create the following directories:
+@verbatim
+$ mkdir workspace
+$ cd workspace
+$ mkdir boardSupport
+$ mkdir legatoAF
+$ mkdir firmware
+@endverbatim
+
+It should look like this:
+@verbatim
+workspace/
+├── firmware
+├── legatoAF
+└── mangOh
+@endverbatim
+
+@section basicBuildLegato_Download Download Source Code
+
+Next download the source code into the @c legatoAF directory, you can either checkout the repo via
+GitHub or download a copy of the tarball.  GitHub gives you the advantage of tracking changes and
+gives you access to the whole history of changes and releases.
+
+@subsection basicBuildLegato_Clone Clone from GitHub
+
+The [GitHub Legato Project](https://github.com/legatoproject/legato-af#clone-from-github)
+provides all up-to-date code development as well as official releases.  To clone the latest official
+release clone the last release tag (e.g., -m legato/releases/17.10.0.xml), and not the master branch.
+
+See the @ref aboutReleaseInfo page to list the supported releases.
+
+Install repo:
+
+@verbatim
+$ sudo apt-get install repo
+@endverbatim
+
+OR
+
+@verbatim
+$ wget -O ~/bin/repo https://storage.googleapis.com/git-repo-downloads/repo
+$ chmod a+x ~/bin/repo
+@endverbatim
+
+Clone a specific release:
+
+@verbatim
+$ cd legatoAF
+$ repo init -u git://github.com/legatoproject/manifest -m legato/releases/17.07.1.xml
+$ repo sync
+@endverbatim
+
+Clone from master (latest in progress development):
+
+@verbatim
+$ cd legatoAF
+$ repo init -u git://github.com/legatoproject/manifest
+$ repo sync
+@endverbatim
+
+@subsection basicBuildLegato_Tarball Download Tarball
+
+Visit our @ref aboutReleaseInfo "Release Info" page to download the Legato AF.
+
+Download the Tarball and extract it to a directory on your local machine
+@verbatim
+$ mv ~/Downloads/legato-17.11.0.tar.bz2 legatoAF/
+$ cd legatoAF/
+$ tar -xvf legato-17.11.0.tar.bz2
+@endverbatim
+
+@section basicBuildLegato_Dirs Directory Overview
+
+Directory Overview of the Legato AF Repo:
+
+|Directory          | Description                                                                        |
+|---------------    | -----------------------------------------------------------------------------------|
+| @c apps           | Source Code for Apps included with the Framework                                   |
+| @c bin            | Created by build system and populated with executable files run on the development host that ran the build. Contains files like @c mksys, @c app and @c update. |
+| @c build          | Results of a framework build. Includes @c build/tools and @c build/target.         |
+| @c cmake          | CMake scripts used by the build system.                                            |
+| @c components     | Platform-independent components that are used in apps.                             |
+| @c framework      | Source code for the Legato framework.                                              |
+| @c targetFiles    | Files needed for installation on target devices.                                   |
+| @c targets        | Target specific configuration files                                                |
+| @c platformAdaptor| Components specific to specific platforms. **covered under other licenses          |
+| @c modules        | Other repositories that extend Legato.                                             |
+| @c 3rdParty       | Third-party code that is integrated with Legato. **covered under other licenses    |
+
+Next, @ref basicBuildToolchain "install a toolchain" then
+@ref basicBuildLegato_make "configure your environment" before you start coding.
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

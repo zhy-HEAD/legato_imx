@@ -1,0 +1,13 @@
+version: 1
+
+sandboxed: false
+
+executables:
+{
+    exe = ($CLIENT)
+}
+
+extern:
+{
+    client = exe.client.foo
+}

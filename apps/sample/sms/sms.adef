@@ -1,0 +1,19 @@
+executables:
+{
+    sms = ( smsClient )
+}
+
+processes:
+{
+    run:
+    {
+        ( sms )
+    }
+}
+
+start: manual
+
+bindings:
+{
+    sms.smsClient.le_sms -> modemService.le_sms
+}

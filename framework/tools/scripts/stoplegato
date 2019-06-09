@@ -1,0 +1,68 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+# It outputs "Wasn't running." if they were not running.  It outputs "Stopped." if they were
+# stopped.  It outputs "***ERROR: ", followed by an error message (to standard error) if it fails.
+
+help_short_desc="stop legato on the localhost"
+
+help_usage=(" ")
+
+help_long_description=(
+"$commandName stops the Legato Service Directory, Log Control Daemon"
+"and Config Tree on the localhost machine (started by startlegato)."
+""
+"The exit code will be 1 if the script failed to stop any of the"
+"components. An exit code of 0 indicates that legato is now not"
+"running either because it was successfully stopped or it was not"
+"running in the first place."
+)
+
+CheckForHelp $@
+
+CONFIG_TREE_PID=$(pgrep configTree)
+if [ "$CONFIG_TREE_PID" ]
+then
+    if ! kill -SIGTERM $CONFIG_TREE_PID
+    then
+        echo "***ERROR: Failed to stop the Config Tree." 1>&2
+        exit 1
+    fi
+
+    STOPPED=true
+fi
+
+LOG_CONTROL_DAEMON_PID=$(pgrep logCtrlDaemon)
+if [ "$LOG_CONTROL_DAEMON_PID" ]
+then
+    if ! kill -SIGTERM $LOG_CONTROL_DAEMON_PID
+    then
+        echo "***ERROR: Failed to stop the Log Control Daemon." 1>&2
+        exit 1
+    fi
+
+    STOPPED=true
+fi
+
+SERVICE_DIRECTORY_PID=$(pgrep -n serviceDir)
+if [ "$SERVICE_DIRECTORY_PID" ]
+then
+    if ! kill -SIGTERM $SERVICE_DIRECTORY_PID
+    then
+        echo "***ERROR: Failed to stop the Service Directory." 1>&2
+        exit 1
+    fi
+
+    STOPPED=true
+fi
+
+if [ "$STOPPED" ]
+then
+    echo "Stopped."
+else
+    echo "Wasn't running."
+fi

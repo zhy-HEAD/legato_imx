@@ -1,0 +1,40 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_mdmDefs_interface.h
+ *
+ * Definition file common to multiple modem related services.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Cf. ITU-T recommendations E.164/E.163. E.164 numbers can have a maximum of 15 digits except the
+ * international prefix ('+' or '00'). One extra byte is added for the null character.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE  PHONE_NUM_MAX_LEN   = (15+2);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Cf. ITU-T recommendations E.164/E.163. E.164 numbers can have a maximum of 15 digits except the
+ * international prefix ('+' or '00'). One extra byte is added for the null character.
+ * One extra byte is added for the null character.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE  PHONE_NUM_MAX_BYTES = (PHONE_NUM_MAX_LEN+1);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+*  IP Version
+*/
+//--------------------------------------------------------------------------------------------------
+ENUM IpVersion
+{
+    IPV4,    ///< IPv4 technology
+    IPV6,     ///< IPv6 technology
+    IPMAX
+};
+

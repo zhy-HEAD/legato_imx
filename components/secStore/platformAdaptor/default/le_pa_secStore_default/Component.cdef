@@ -1,0 +1,9 @@
+sources:
+{
+    pa_secStore_default.c
+}
+
+cflags:
+{
+    -I$CURDIR/../../inc
+}

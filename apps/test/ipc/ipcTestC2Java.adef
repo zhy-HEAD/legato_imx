@@ -1,0 +1,24 @@
+/*
+ * Copyright (C) Sierra Wireless Inc.
+ */
+
+executables:
+{
+    server = ( JavaServer )
+    client = ( CClient )
+}
+
+processes:
+{
+    run:
+    {
+        ( server )
+    }
+
+    faultAction: restart
+}
+
+bindings:
+{
+    client.CClient.ipcTest -> server.JavaServer.ipcTest
+}

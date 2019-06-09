@@ -1,0 +1,185 @@
+/** @page conceptsSecuritySandboxConfigSample Sandbox Config Sample
+
+This topic describes how to configure your sandboxed app, and find the root causes of sandbox
+related problems.
+
+By default, all apps are @ref conceptsSecuritySandbox "sandboxed". If your app is written in C or
+C++, and only uses Legato APIs and standard libraries, then you may already be running your app in
+a sandbox without even knowing it. Sometimes you need more, and therefore, may be prevented
+from accessing something you need.
+
+We'll use a trivial Python program example to demonstrate how to sandbox apps properly.
+
+When shell command samples are provided, lines beginning with '$' are run on the development PC, and
+lines beginning with '#' are run on the target device (either through @c ssh or the serial console).
+
+See @ref getStartedApps for details on on how to create Legato apps.
+
+@section conceptsSecuritySandbox_createApp Create App
+
+Create your @c hello.py app like this:
+@code
+python
+print("Hello world!")
+@endcode
+
+Now create an @c .adef file called @c helloPython.adef that looks like this:
+
+@code
+    bundles:
+    {
+        file:
+        {
+            hello.py /   /* bundle hello.py into the app, appearing in the root of the sandbox. */
+        }
+    }
+    requires:
+    {
+        file:
+        {
+            /usr/bin/python /usr/bin/     /* import python interpreter into /usr/bin in sandbox */
+        }
+    }
+    processes:
+    {
+        run:
+        {
+            ( python /hello.py)           /* run hello.py when the app starts */
+        }
+    }
+@endcode
+
+@section conceptsSecuritySandbox_build Build and Install App
+
+You're ready to build and install your sandboxed app:
+@code
+$ mkapp helloPython.adef  -t wp85 && update helloPython.wp85.update 192.168.2.2
+@endcode
+
+@section conceptsSecuritySandbox_checkLogs Check Logs
+
+To ensure everything fired correctly, you need to check your target's log:
+@code
+# logread | grep helloPython
+@endcode
+
+Oops, there's an error:
+
+@code
+python: error while loading shared libraries: libpython2.7.so.1.0: cannot open shared object file: No such file or directory
+@endcode
+
+This is the dynamic linker telling us it can't find the library @c libpython2.7.so.1.0 that
+is needed by the @c python interpreter.
+
+The library path <code>/usr/lib/libpython2.7.so.1.0 /usr/lib/</code> needs to be added to the
+@c .adef in the @c requires/file section:
+
+@code
+    requires:
+    {
+        file:
+        {
+            /usr/bin/python /usr/bin/
+            /usr/lib/libpython2.7.so.1.0 /usr/lib/
+         }
+    }
+@endcode
+
+If you're unsure of a library path, use @c find on the target device:
+@code
+# find -name libpython2.7.so.1.0 /
+/usr/lib/libpython2.7.so.1.0
+@endcode
+
+Then you need to build and install it again:
+@code
+$ mkapp helloPython.adef  -t wp85 && update helloPython.wp85.update 192.168.2.2
+@endcode
+
+Check the log, and it's still complaining about @c libutil.so.1, so we add
+@c /lib/libutil.so.1 /lib/ to the requires/files section:
+@code
+    requires:
+    {
+        file:
+        {
+            /usr/bin/python /usr/bin/
+            /usr/lib/libpython2.7.so.1.0 /usr/lib/
+            /lib/libutil.so.1 /lib/
+        }
+    }
+@endcode
+
+@section conceptsSecuritySandbox_strace Using strace
+
+If the logs don't indicate what the problem is, you can use @c strace to trace all the
+system calls that the program performs, and look for failed calls to <code>open()</code>.
+
+Do this by changing adding <c>strace -f</c> in front of your program name in the processes/run
+section of the .adef:
+
+@code
+    processes:
+    {
+        run:
+        {
+            ( strace -f python /hello.py)           /* run hello.py when the app starts */
+        }
+    }
+@endcode
+
+@section conceptsSecuritySandbox_requiresDirs Requiring Whole Directories
+
+Continuing your investigation, you find your app needs stuff from
+<c>/usr/lib/python2.7</c> and <c>/usr/include/python2.7</c>.
+
+There's a lot of stuff in there. You know it's safe to allow your app access to
+all of it. To save you the hassle of going through the discovery process
+for each individual file in the directories your program might need, you can just
+add the whole directories to your sandbox using a @c requires/dir section in your @c .adef:
+
+@code
+    requires:
+    {
+        dir:
+        {
+            /usr/lib/python2.7 /usr/lib/
+            /usr/include/python2.7 /usr/include/
+        }
+    }
+@endcode
+
+@section conceptsSecuritySandbox_envVars Environment Variables
+
+The log will now display something like:
+@verbatim
+getpwuid(): uid not found: 1017
+@endverbatim.
+
+You need to set the environment variables. For our @c py example, you add this to the @c .adef file
+processes section:
+@code
+    envVars:
+    {
+        HOME="/"
+    }
+
+
+@endcode
+
+@section conceptsSecuritySandbox_success Sandbox Working Correctly
+
+Viewing the logs one more time, you see:
+@verbatim
+INFO | python[8816] | Hello world!
+@endverbatim
+
+Congratulations! You have shown that you care about security and are proving yourself to be
+a thorn in the side of hackers and an asset to your developer community, the greater Internet
+community, and all those who might be affected by vulnerabilities in networked devices.
+We sincerely thank you!
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

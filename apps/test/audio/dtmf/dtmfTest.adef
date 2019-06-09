@@ -1,0 +1,26 @@
+executables:
+{
+    dtmfTest = ( dtmfTestComp )
+}
+
+maxFileSystemBytes: 256K
+
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LEVEL = DEBUG
+    }
+
+    maxFileBytes: 5000K
+}
+
+start: manual
+
+bindings:
+{
+    dtmfTest.dtmfTestComp.le_audio -> audioService.le_audio
+    dtmfTest.dtmfTestComp.le_mcc -> modemService.le_mcc
+}
+

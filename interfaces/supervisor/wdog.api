@@ -1,0 +1,37 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_supervisor_wdog Supervisor Watchdog API
+ *
+ * @ref wdog_interface.h "API Reference"
+ *
+ * A Supervisor API used by the Watchdog daemon to let the Supervisor know that a watched
+ * process has timed out
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file wdog_interface.h
+ *
+ * Legato @ref c_supervisor_wdog include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * WatchdogTimedOut is called by the Watchdog Daemon to alert the Supervisor that a watchdog has
+ * timed out and the Supervisor should check for configured actions for that app/process and
+ * execute them.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION WatchdogTimedOut
+(
+    uint32 procId    ///< [IN] The Id of the process that timed out
+);

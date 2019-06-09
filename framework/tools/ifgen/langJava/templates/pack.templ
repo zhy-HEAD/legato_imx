@@ -1,0 +1,100 @@
+{#-
+ # Helper macros for generating packing/unpacking code.
+ #
+ # Copyright (C) Sierra Wireless Inc.
+-#}
+{%- set _getterMap = { "boolean": "buffer.readBool()",
+                       "double": "buffer.readDouble()",
+                       "byte": "buffer.readByte()",
+                       "String": "buffer.readString()",
+                       "FileDescriptor": "buffer.getFileDescriptor()",
+                       "Result": "Result.fromInt(buffer.readInt())",
+                       "OnOff": "OnOff.fromInt(buffer.readInt())" } %}
+{%- set _setterMap = { "boolean":  "buffer.writeBool",
+                       "double":  "buffer.writeDouble",
+                       "byte": "buffer.writeByte",
+                       "BigInteger": "buffer.writeNumber",
+                       "FileDescriptor":  "buffer.setFileDescriptor",
+                       "Result":  "buffer.writeInt",
+                       "OnOff": "buffer.writeInt" } %}
+{%- macro PackValue(apiType, value) -%}
+    {%- if apiType is BitMaskType -%}
+buffer.writeNumber({{value}}.getType(), {{value}}.getValue());
+    {%- elif apiType is EnumType -%}
+buffer.writeNumber({{value}}.getType(), {{value}}.getValue());
+    {%- elif apiType is StructType -%}
+{{apiType|FormatType}}.Pack(buffer, {{value}});
+    {%- elif apiType is HandlerReferenceType -%}
+buffer.writeLongRef({{value}});
+    {%- elif apiType is ReferenceType -%}
+buffer.writeLongRef({{value}} == null ? 0 : {{value}}.getRef());
+    {%- elif apiType is HandlerType -%}
+long ref{{value}} = (({{value}} == null) ? 0 : handlerMap.newRef(new HandlerMapper({{value}}, true)));
+buffer.writeLongRef(ref{{value}});
+    {%- elif apiType.name ==  'le_result_t' or apiType.name == 'le_onoff_t' -%}
+{{_setterMap[apiType|FormatType]}}({{value}}.getValue());
+    {%- elif apiType|FormatType == "BigInteger"  -%}
+{{_setterMap[apiType|FormatType]}}(IntType.fromApiType("{{apiType.name}}"), {{value}});
+    {%- else -%}
+{{_setterMap[apiType|FormatType]}}({{value}});
+    {%- endif %}
+{%- endmacro %}
+{%- macro PackParameter(parameter, value=None) -%}
+    {%- if not value %}{% set value=parameter.name %}{% endif %}
+    {%- if parameter is StringParameter -%}
+buffer.writeString({{value}}, {{parameter.maxCount}});
+    {%- else -%}
+{{PackValue(parameter.apiType, value)}}
+    {%- endif %}
+{%- endmacro %}
+{%- macro UnpackValue(valueType, valueName, functionName=None) -%}
+    {%- if valueType is EnumType -%}
+        {{valueType|FormatType}}.fromValue(buffer.readNumber({{valueType|FormatType}}.getType()))
+    {%- elif valueType is BitMaskType -%}
+        {{valueType|FormatType}}.fromValue(buffer.readNumber({{valueType|FormatType}}.TYPE))
+    {%- elif valueType is StructType -%}
+        {{valueType|FormatType}}.Unpack(buffer)
+    {%- elif valueType is HandlerReferenceType -%}
+        buffer.readLongRef()
+    {%- elif valueType is ReferenceType -%}
+        {{valueType|FormatType}}.fromValue(buffer.readLongRef())
+    {%- elif valueType is HandlerType -%}
+    new {{valueType.iface.name}}.{{valueType.name}}()
+    {
+        private long context;
+        private ServerSession session;
+
+        @Override
+        public void handle(
+            {%- for handlerParameter in valueType.parameters %}
+            {{-handlerParameter.apiType|FormatType(false)}} _{{handlerParameter.name}}
+                {%- if not loop.last %}, {% endif %}
+            {%- endfor -%}
+        )
+        {
+            Message message = session.createMessage();
+            MessageBuffer buffer = message.getBuffer();
+
+            buffer.writeInt(MessageID_{{functionName}});
+            buffer.writeLongRef(context);
+            {%- for handlerParameter in valueType.parameters %}
+            {{PackParameter(handlerParameter, "_"+handlerParameter.name)}}
+            {%- endfor %}
+
+            message.send();
+        }
+
+        public {{valueType.iface.name}}.{{valueType.name}} setContext(long newContext,
+            {#- #} ServerSession newSession)
+        {
+            context = newContext;
+            session = newSession;
+            return this;
+        }
+    }.setContext({{valueName}}Context, currentSession)
+    {%- elif valueType|FormatType == "BigInteger"  -%}
+    buffer.readNumber(IntType.fromApiType("{{valueType.name}}"))
+    {%- else  -%}
+    {{_getterMap[valueType|FormatType]}}
+    {%- endif %}
+{%- endmacro %}

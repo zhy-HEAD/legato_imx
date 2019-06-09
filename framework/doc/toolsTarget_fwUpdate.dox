@@ -1,0 +1,26 @@
+/** @page toolsTarget_fwUpdate fwupdate
+
+Use the target-based Firmware Update tool to download image files directly to the device (e.g., firmware or Linux image with
+a bootloader, kernel and root file system).
+
+<h1>Usage</h1>
+
+<b><c> fwupdate [OPTION] </c></b>
+
+@verbatim fwupdate help @endverbatim
+> Print help message and exit
+
+@verbatim fwupdate download FILE @endverbatim
+> Download the given CWE file.
+> After a successful download, the modem will reset.
+
+@verbatim fwupdate query @endverbatim
+> Query the current firmware version.<br />
+> This includes the modem firmware version, the bootloader version, and the Linux kernel version.<br />
+> This can be used after a download and modem reset, to confirm the firmware version.
+
+<HR>
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

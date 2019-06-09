@@ -1,0 +1,38 @@
+requires:
+{
+    api:
+    {
+        airVantage/legacy/le_avc.api [types-only]
+
+        le_update.api
+        le_instStat.api
+        le_appRemove.api
+        le_appCtrl.api
+        le_framework.api
+        le_appInfo.api
+
+        le_cfg.api
+    }
+
+    component:
+    {
+        $LEGATO_ROOT/components/airVantage/avcDaemon
+        $LEGATO_ROOT/components/appCfg
+        $LEGATO_AVC_PA
+    }
+}
+
+cflags:
+{
+    -std=c99
+    -I$CURDIR/../platformAdaptor/inc
+    -I${LEGATO_ROOT}/framework/liblegato    // TODO: Remove this encapsulation breakage.
+    -I${LEGATO_ROOT}/components/appCfg
+}
+
+sources:
+{
+    avcAppUpdate.c
+    avcFrameworkUpdate.c
+    avcUpdateShared.c
+}

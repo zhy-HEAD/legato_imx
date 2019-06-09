@@ -1,0 +1,232 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_temp Temperature Monitoring
+ *
+ * @ref le_temp_interface.h "API Reference" <br>
+ * @ref SwiPlatforms Sierra Wireless Platforms Constraints
+ *
+ * <HR>
+ *
+ * The temperature monitoring API allows an application to monitor the temperature by receiving
+ * temperature values from sensors and sets warnings and critical temperature thresholds.
+ *
+ * @warning When a Critical event occurs, some platform can automatically switch off.
+ *
+ * @warning Some of the functions in this API may not be supported by your target. Please refer to
+ * @ref platformConstraintsTemperature page for full details.
+ *
+ * @section le_temp_binding IPC interfaces binding
+ *
+ * All the functions of this API are provided by the @b modemService application service.
+ *
+ * Here's a code sample binding to modem services:
+ * @verbatim
+   bindings:
+   {
+      clientExe.clientComponent.le_temp -> modemServices.le_temp
+   }
+   @endverbatim
+ *
+ *
+ * @section le_temp_monitoring Monitoring
+ *
+ * @warning Ensure to check the names of supported sensors and thresholds for your specific
+ * platform. Please refer to @ref platformConstraintsTemperature page for full details.
+ *
+ * @warning An hysteresis can be dependent of the platform. Be sure to verify your platform's
+ * specifications.
+ *
+ * @warning On some platforms, the thresholds parameters are persistent and a Platform reboot is
+ * required for thresholds change takes effect.
+ *
+ * When temperature thresholds are reached, an event is sent with a string type that specifies the
+ * raised threshold.
+ *
+ * - le_temp_Request() function allows the application to monitor a requested temperature sensor.
+ *
+ * - le_temp_GetSensorName() function allows the application to retrieve the temperature sensor's
+ *   name from its reference.
+ *
+ * - le_temp_GetTemperature() function allows the application to retrieve the temperature of a
+ *   sensor.
+ *
+ * - le_temp_GetThreshold() function allows the application to get the configured threshold
+ *   for a sensor.
+ *
+ * - le_temp_SetThreshold() function allows the application to configure a threshold for a sensor.
+ *
+ * - le_temp_StartMonitoring() function allows to start the temperature monitoring with the
+ *   thresholds configured by le_temp_SetThreshold() function.
+ *
+ * - le_temp_AddThresholdEventHandler() API adds a handler to notify when a temperature
+ *   threshold is reached.
+ *
+ * - le_temp_RemoveThresholdEventHandler() API removes the temperature handler.
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_temp_interface.h
+ *
+ * Legato @ref c_temp include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  Reference type for a temperature sensor.
+ */
+//--------------------------------------------------------------------------------------------------
+REFERENCE Sensor;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum sensor's name string length.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE SENSOR_NAME_MAX_LEN = (100);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum sensor's name string length.
+ * One extra byte is added for the null character.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE SENSOR_NAME_MAX_BYTES = (SENSOR_NAME_MAX_LEN+1);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum threshold's name string length.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE THRESHOLD_NAME_MAX_LEN = (100);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum threshold's name string length.
+ * One extra byte is added for the null character.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE THRESHOLD_NAME_MAX_BYTES = (THRESHOLD_NAME_MAX_LEN+1);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Request a temperature sensor reference.
+ *
+ * @return
+ *      - Reference to the temperature sensor.
+ *      - NULL when the requested sensor is not supported.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION Sensor Request
+(
+    string  sensorName[SENSOR_NAME_MAX_LEN]  IN ///< Name of the temperature sensor.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Retrieve the temperature sensor's name from its reference.
+ *
+ * @return
+ *      - LE_OK            The function succeeded.
+ *      - LE_OVERFLOW      The name length exceed the maximum length.
+ *      - LE_FAULT         The function failed.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetSensorName
+(
+    Sensor  sensor                           IN, ///< Temperature sensor reference.
+    string  sensorName[SENSOR_NAME_MAX_LEN]  OUT ///< Name of the temperature sensor.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Handler for Temperature event.
+ */
+//--------------------------------------------------------------------------------------------------
+HANDLER ThresholdEventHandler
+(
+    Sensor  sensor                             IN, ///< Temperature sensor reference.
+    string  threshold[THRESHOLD_NAME_MAX_LEN]  IN  ///< Name of the raised threshold.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This event provides information on the threshold reached.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+EVENT ThresholdEvent
+(
+    ThresholdEventHandler ThresholdEventHandler
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the temperature in degree Celsius.
+ *
+ * @return
+ *      - LE_OK            The function succeeded.
+ *      - LE_FAULT         The function failed to get the temperature.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetTemperature
+(
+    Sensor  sensor          IN, ///< Temperature sensor reference.
+    int32   temperature     OUT ///< Temperature in degree Celsius.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the temperature threshold in degree Celsius. This function does not start the temperature
+ * monitoring, call le_temp_StartMonitoring() to start it.
+ *
+ * @return
+ *      - LE_OK            The function succeeded.
+ *      - LE_FAULT         The function failed.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetThreshold
+(
+    Sensor  sensor                            IN, ///< Temperature sensor reference.
+    string  threshold[THRESHOLD_NAME_MAX_LEN] IN, ///< Name of the threshold.
+    int32   temperature                       IN  ///< Temperature threshold in degree Celsius.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the temperature threshold in degree Celsius.
+ *
+ * @return
+ *      - LE_OK            The function succeeded.
+ *      - LE_FAULT         The function failed.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetThreshold
+(
+    Sensor  sensor                            IN, ///< Temperature sensor reference.
+    string  threshold[THRESHOLD_NAME_MAX_LEN] IN, ///< Name of the threshold.
+    int32   temperature                       OUT ///< Temperature threshold in degree Celsius.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Start the temperature monitoring with the temperature thresholds configured by
+ * le_temp_SetThreshold() function.
+ *
+ * @return
+ *      - LE_OK            The function succeeded.
+ *      - LE_BAD_PARAMETER There is a mismatch with the configured threshold values.
+ *      - LE_FAULT         The function failed to apply the thresholds.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t StartMonitoring
+(
+);

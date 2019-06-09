@@ -1,0 +1,23 @@
+sandboxed: false
+
+executables:
+{
+    avcCompat = ( $LEGATO_ROOT/components/airVantage/avcCompat )
+}
+
+processes:
+{
+    run:
+    {
+        (avcCompat)
+    }
+
+    faultAction: restart
+}
+
+bindings:
+{
+    avcCompat.avcCompat.le_appCtrl -> <root>.le_appCtrl
+    avcCompat.avcCompat.le_appInfo -> <root>.le_appInfo
+    avcCompat.avcCompat.le_avc -> avcService.le_avc
+}

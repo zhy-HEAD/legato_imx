@@ -1,0 +1,24 @@
+executables:
+{
+    greeter = (greetServer)
+    snubber = (greetServer)
+    magician = (magician)
+}
+
+processes:
+{
+    run:
+    {
+        (greeter "Greetings!")
+        (snubber "BAH!")
+        (magician)
+    }
+}
+
+extern:
+{
+    snub = snubber.greetServer.hello
+    magician.magician.magic
+
+    hello = greeter.greetServer.hello
+}

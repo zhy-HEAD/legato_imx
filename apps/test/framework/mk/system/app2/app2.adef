@@ -1,0 +1,20 @@
+version: 2
+
+executables:
+{
+    exe = (server)
+    exe2 = (exe2)
+}
+
+extern:
+{
+    server = exe.server.bar
+    client = exe.server.le_cfg
+}
+
+groups:
+{
+    group1
+    group2
+    group3
+}

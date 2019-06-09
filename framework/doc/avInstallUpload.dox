@@ -1,0 +1,129 @@
+/** @page avInstallUpload Create and Install Bundles
+
+Build and update system and App or System bundles and upload them to AirVantage to deploy on your
+target.
+
+@section avInstall Create App or System Bundle
+
+AirVantage supports installing App or System bundles over the air to remote targets.  The bundle
+must be created and then packaged by the @ref toolsHost_av-pack tool.
+
+@c Av-pack creates a manifest xml file for AirVantage with the binary image ready to
+upload to the AirVantage server.
+
+Example of building an application for deployment through AirVantage:
+@verbatim
+$ mkapp -t wp85 helloWorld.adef
+$ av-pack -u helloWorld.wp85.update -b _build_helloWorld/wp85 -t abcCo.jsmith.helloWorld
+@endverbatim
+
+@ref buildToolsmkapp builds the @c helloWorld app for the @c wp85 target. The update pack file
+@c helloWorld.wp85.update and the AirVantage manifest file @c manifest.app are generated.
+
+The @c manifest.app file is generated under the builds working directory (e.g.,
+@c ./_build_helloWorld/wp85 ).
+
+@ref toolsHost_av-pack packs these two files together and sets the apps @b type to
+<c>abcCo.jsmith.helloWorld</c>.
+
+Example of building a system for deployment through AirVantage:
+
+@verbatim
+$ mksys -t wp85 mySystem.sdef
+$ av-pack -u mySystem.wp85.update -b build/wp85 -t abcCo.jsmith.mySystem
+@endverbatim
+
+@ref buildToolsmksys builds the @c mySystem system for the @c wp85 target. The update pack file
+@c mySystem.wp85.update and the AirVantage manifest file @c manifest.sys are generated.
+
+@subsection avInstallAppType Setting an App Type
+
+The App's type must be a globally-unique app type identifier, @b unique among @b all @b Apps in
+@b all @b companies @b anywhere on AirVantage.
+
+Best Practices in uniquely naming type identifiers:
+    - Include a unique identifier for your company name to prevent naming conflicts with other
+    companies in the world.
+    - For developers Apps, include the developer's name to prevent conflicts with other developers
+    in the same company.
+
+@note If no type is specified the type defaults to: @c appName-legato-application.
+
+The output for this sample is @c helloWorld.zip. and is located in the build root.
+
+@subsection avInstallAppSigs App Signature Checks
+
+If your target device has been configured for App signature checks or to accept only encrypted
+Apps, you must use your signing/encryption tool to sign the @c .update file and then
+pack it with @c av-pack. Don't sign or encrypt the @c manifest.app file, or the final
+@c .zip file, as AirVantage won't be able to read them.
+
+@verbatim
+$ mkapp -t wp85 helloWorld.adef
+$ cat helloWorld.wp85.update | myAppSigner > helloWorld.wp85.signed
+$ av-pack -f helloWorld.wp85.signed abcCo.jsmith.helloWorld _build_helloWorld/wp85
+@endverbatim
+
+@section avInstallCreateInstJob Create Installation job
+
+To install your App on a remote target, you must first upload your app to AirVantage and then
+Create an App install job to install the App on the remote target.
+
+Upload your App:
+    - Click "Develop"
+    - Choose "My Apps"
+    - Click on the "Release" Button, this will guide you through uploading the zip file you made
+      with @c av-pack.
+    - Once the zip file has been uploaded click "Publish"
+
+Create the App install job:
+    - In your system 'Monitor' view
+    - "More" menu
+    -  Choose "Install Application" and select the zip file created in the previous step.
+
+AirVantage will then queue the App to be installed on your Target.
+
+@section avInstallRcvAgent Receive App on AirVantage Agent
+
+This requires either:
+- creating an @c avc control App using the LWM2M AVC API that accepts the
+download and installation. See @ref c_le_avc API for details.
+- using AT commands to download and install the update.  For information on AT Commands download the
+AT Command Reference from your module provider. (e.g.,
+[AirPrime WPX5XX/WP76XX AT Command Reference](https://source.sierrawireless.com/resources/airprime/software/airprime_wpx5xx_wp76xx_wp77xx_at_command_reference/) ).
+
+@subsection avInstallUploadStatus Check Success Status on AirVantage
+
+If the installation was successful, you should find @c helloWorld in the installed Apps and
+on the targets' "Monitor" view App list in the AirVantage UI.
+
+@subsection avInstallUpload_CustomSystem Uploading a 17.05 Legato System Bundle
+
+If you have upgraded to 17.05 and wish to sync your Legato System with AirVantage, the target and
+revision number need to be updated in the App model before it is uploaded to the AirVantage Server.
+
+Once you've built your legato system, you need to extract the model.app from the zip file and update
+name="<target>_<legatoVersion>" and revision="<legatoVersion>" with the target and version that
+matches your Legato System.  (e.g., if version = "abc" then update model.app to
+name="WP8548_17.05.0_abc" and revision="17.05.0_abc")
+
+@verbatim
+$ cat build/<target>/system/staging/version             # displays the version number
+@endverbatim
+
+In the legato_model.zip, extract model.app; modify the name="<target>_<legatoVersion>" and
+revision="<legatoVersion>" to match the version number in the build.
+
+@verbatim
+$ unzip -d . legato_model.zip model.app
+$ vi model.app                          # edit the two fields
+$ zip -ur legato_model.zip model.app
+@endverbatim
+
+Once legato_model.zip has been updated, upload to the AirVantage server and publish the model.
+
+Sync the AirVantage Server with your target and this will link to your new App model.
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

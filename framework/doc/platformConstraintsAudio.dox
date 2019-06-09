@@ -1,0 +1,100 @@
+/** @page platformConstraintsAudio Audio
+
+@ref c_audio "le_audio" functions are constrained by the following platform limitations.
+
+<b>DTMF, playback and recording:</b>
+- DTMF decoding works only on MdmVoice Rx stream. DTMF's reception handler must be installed before
+  call initiation.
+
+- File Playback/Recording: WAVE, AMR Narrowband and AMR Wideband formats are supported.
+
+- Only one Recording/sample extraction can be activated simultaneously.
+
+<HR>
+
+<b>Possible audio connections:</b>
+
+| Input stream \ Output stream | Spkr | USB Tx | PCM Tx | I2S Tx | MdmVoice Tx | Recorder |
+|                              |:    :|:      :|:      :|:      :|:           :|:        :|
+| Mic                          |      |        |        |        |      X      |    X     |
+| USB Rx                       |      |        |        |        |      X      |    X     |
+| PCM Rx                       |      |        |        |        |      X      |    X     |
+| I2S Rx                       |      |        |        |        |      X      |    X     |
+| MdmVoice Rx                  |  X   |   X    |   X    |   X    |             |    X     |
+| Player                       |  X   |   X    |   X    |   X    |      X      |          |
+
+Player = file playback and samples insertion<br>
+Recorder = file recording and samples extraction
+
+@note The Mic input and Spkr output are not available on AR759x platform.<br>
+      Please refer to the Product Technical Specification document of your platform for further
+      details.<br><br>
+
+@note Only 1 point to 1 point connection is possible except for Player and Recorder.<br>
+      Player and Recorder can be added to any active 1 point to 1 point connections, or tied
+      to 1 single stream.<br>
+
+<HR>
+
+<b>Available functions for the different audio streams:</b>
+
+| Function \ Stream | I2S Tx | I2S Rx | PCM Tx | PCM Rx | USB Tx | USB Rx | Spkr | Mic | MdmVoice Tx | MdmVoice Rx | Player | Recorder |
+|                   |:      :|:      :|:      :|:      :|:      :|:      :|:    :|:   :|:           :|:           :|:      :|:        :|
+| Gain (Set / Get)  |        |        |        |        |        |        |      |  X  |      X      |      X      |   X    |          |
+| Mute / Unmute     |   X    |   X    |   X    |   X    |   X    |    X   |  X   |  X  |      X      |      X      |   X    |          |
+| NS                |        |        |        |        |        |        |      |     |      X      |             |        |          |
+| EC                |        |        |        |        |        |        |      |     |      X      |             |        |          |
+| IIR               |        |        |        |        |        |        |      |     |      X      |      X      |        |          |
+| FIR               |        |        |        |        |        |        |      |     |      X      |      X      |        |          |
+| AGC               |   X    |        |   X    |        |   X    |        |  X   |     |      X      |      X      |        |          |
+
+
+NS = Noise Suppressor <br>
+EC = Echo Canceller <br>
+IIR = Infinite Impulse Response filter <br>
+FIR = Finite Impulse Response filter <br>
+AGC = Automatic Gain Control
+
+<b>Gains value's:</b>
+
+<b>Mic:</b>
+ - range: 0x0000 – 0xFFFF;
+ - value (in dB) = 20*Log(\<value\>/0x0100)
+
+<b>MdmVoiceRx:</b>
+ - range: 0 - 8 (integer);
+ - the value is not in dB, '0' means lowest volume value (not muted) and '8' means the
+   highest volume value.
+
+<b>MdmVoiceTx:</b>
+ - range: 0x0000 – 0xFFFF;
+ - value (in dB) = 20*Log(\<value\>/0x2000)
+
+<b>Player:</b>
+ - range: 0x0000 – 0xFFFF;
+ - value (in dB) = 20*Log(\<value\>/0x2000)
+
+@note AR specific gains can use the le_audio_SetPlatformSpecificGain() function with
+      \b "D_AFE_GAIN_RX" and \b "D_AFE_GAIN_TX" parameters.
+
+ <b>"D_AFE_GAIN_RX":</b>
+ - range: 0x0000 – 0xFFFF;
+ - value (in dB) = 20*Log(\<value\>/0x2000)
+
+<b>"D_AFE_GAIN_TX":</b>
+ - range: 0x0000 – 0xFFFF;
+ - value (in dB) = 20*Log(\<value\>/0x2000)
+
+<HR>
+
+<b>The following diagram shows where the functions are applied in a voice call audio path
+   (applicable for AR755x, AR8652, WP8548):</b>
+
+@image html AR755x_Ext_AudioBlockDiagram_Legato.jpg
+
+<HR>
+
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

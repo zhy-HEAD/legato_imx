@@ -1,0 +1,96 @@
+/** @page legatoServicesAirVantage AirVantage Service
+
+Use the AirVantage Platform Service for remote administration of Legato Application Framework.
+
+Current Version: 2.0
+
+See the @ref avMigration Guide to compare differences between AVC 1.0 and AVC 2.0.
+
+@section legatoServicesAirVantage_GS Getting Started
+
+This service is automatically included in the Legato Framework by including @c default.sdef in your
+system and the service loads automatically on startup.
+
+The following line in the @c default.sdef is responsible for adding the Air Vantage Service to your
+system:
+@verbatim
+#include "$LEGATO_ROOT/apps/platformServices/defaultAirVantage.sinc"
+@endverbatim
+
+@section legatoServicesAirVantage_Concepts Concepts
+
+<b>AVC 2.0 New Features:</b>
+- Asset data can be dynamically created with in the application and there is no need to define the
+  data model in the @c .cdef
+- Asset data settings now support read/write from the AirVantage Server
+- Asset data definitions have changed to resources (paths)
+- TimeSeries does not need an Asset Model to send data points to the AirVantage Server
+- TimeSeries enables users to aggregate multiple data points into a single push
+- TimeSeries Observe function has been replaced with a push function
+
+| Section                      | Description                                                  |
+| ---------------------------- | -------------------------------------------------------------|
+| @subpage avMigration         | AVC 1.0 vs AVC 2.0 differences                               |
+| @subpage avRegister          | Register a target with AirVantage                            |
+| @subpage avInstallUpload     | Build an App Bundle and deploy using AirVantage              |
+
+
+
+@section legatoServicesAirVantage_API APIs
+
+The AirVantage Platform Service exposes two APIs that will manage connecting to the AirVantage
+Server and setting up any Asset Data with the AirVantage Service.
+
+| API Guide            | API Reference                  | File Name        | Description                                        |
+| ---------------------|--------------------------------|------------------| ---------------------------------------------------|
+| @subpage c_le_avc    | @subpage le_avc_interface.h    | @c le_avc.api    | Control and configure upgrade and network settings |
+| @subpage c_le_avdata | @subpage le_avdata_interface.h | @c le_avdata.api | Send and receive data from the AirVantage Server   |
+
+The AirVantage Connector is implemented by the @b avcService.
+
+The avcService depends on:
+  - @ref c_le_data "dataConnectionService"
+  - @ref legatoServicesModem "modemService"
+  - @ref c_le_cellnet "cellNetService"
+
+To bind to these APIs customize the following bindings for your App's .adef:
+
+@code
+bindings:
+{
+    <myExecutable>.<myComponentClient>.le_avc -> avcService.le_avc
+    <myExecutable>.<myComponentClient>.le_avdata -> avcService.le_avdata
+}
+@endcode
+
+@section legatoServicesAirVantage_HowTo How Tos & Samples
+
+| Section                      | Description                                                  |
+| ---------------------------- | -------------------------------------------------------------|
+| @subpage avData              | How to use AssetData with AirVantage 2.0                     |
+| @subpage avExchangeData      | Tutorial on sending/receiving sensor data to/from AirVantage |
+| @subpage avConfigure         | Troubleshooting and Configuration settings for AirVantage    |
+
+The @ref sampleApps_AV App provides examples of:
+ - Automatic download/install of OTA packages
+ - Receiving incoming SMS wake up messages
+ - Reading and setting a Polling timer
+ - Reading and setting Retry timers
+
+The @ref sampleApps_AVAssetData provides a @ref avExchangeData "tutorial" of:
+- Reading and Pushing Data between a Legato App and the AirVantage Server
+- Using a command to trigger a switch change from the AirVantage Server
+- Creating an App that connects to the AirVantage Server
+
+@section legatoServicesAirVantage_ExternalDocs External Documentation
+
+For AirVantage Server/Sierra Wireless documentation refer to the following links:
+- [AirVantage Getting Started Guide](https://source.sierrawireless.com/airvantage/av/howto/gettingstarted/)
+- [AirVantage Docs for Developing Apps](https://source.sierrawireless.com/airvantage/av/howto/cloud/application_howto/)
+- [AirVantage Application Format Reference](https://source.sierrawireless.com/airvantage/av/reference/application/)
+- [AirVantage Web Services API Documentation](https://source.sierrawireless.com/airvantage/av/reference/cloud/API/)
+- [AirPrime WPX5XX/WP76XX AT Command Reference](https://source.sierrawireless.com/resources/airprime/software/airprime_wpx5xx_wp76xx_wp77xx_at_command_reference/)
+
+Copyright (C) Sierra Wireless Inc.
+
+ **/

@@ -1,0 +1,297 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+if ! [ $LEGATO_ROOT ]; then echo "Run bin/legs first" >&2; exit 1; fi
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+help_short_desc="release legato project"
+
+help_usage=(
+"[OPTIONS]"
+)
+
+help_long_description=(
+"Once Legato has been built for selected targets, this script stages files"
+"and produces a tarball."
+""
+"Options:"
+""
+"-t TARGETS"
+"        Specify comma-separated list of targets the package should be generated for"
+"        (e.g., 'ar7,wp85').  If this option is not specified, packages will be generated"
+"        for all supported targets."
+)
+
+TARGETS="ar7,ar758x,ar759x,wp85,wp750x,wp76xx,wp77xx"
+
+CheckForHelp $@
+
+while getopts ":t:" arg
+do
+    case $arg in
+    t)
+        TARGETS=$OPTARG
+        ;;
+    ?)
+        echo "$0: invalid option -$OPTARG"
+        usage_and_exit 1
+        ;;
+    esac
+done
+
+REPO_EXCLUDE_PATTERN='(legato|qmi/src|proprietary/qct|proprietary/.*/src|docManagement)'
+
+RELEASE_DIR=$LEGATO_ROOT/releases
+VERSION=$(cat $LEGATO_ROOT/version)
+STAGE_NAME=legato-$VERSION
+STAGE_DIR=$RELEASE_DIR/$STAGE_NAME
+PKG_NAME=$STAGE_NAME.tar.bz2
+PKG_NAME_LINK=legato.tar.bz2
+
+echo "Version = $VERSION"
+echo "Preparing package in $STAGE_DIR"
+
+rm -rf $STAGE_DIR
+mkdir -p $STAGE_DIR
+
+CopyRepo() {
+    local path=$1
+
+    set -e
+
+    cd $LEGATO_ROOT/$path
+
+    mkdir -p $STAGE_DIR/$path
+
+    # Copy files managed by git, except the ones that match exclude_pattern
+    git ls-tree -r --name-only HEAD | while read LINE; do
+        if [ -d "$LINE" ]; then
+            echo "Ignoring [$path] $LINE (submodule)"
+            continue
+        fi
+
+        echo "Copying [$path] $LINE"
+        if [ -L "$LINE" ]; then
+            cp -Rd "$LINE" "$STAGE_DIR/$path/$LINE"
+        else
+            mkdir -p $(dirname "$STAGE_DIR/$path/$LINE")
+            cp "$LINE" "$STAGE_DIR/$path/$LINE"
+        fi
+    done
+
+    set +e
+}
+
+# Copy Legato
+CopyRepo ""
+
+# Copy other repositories
+for repo in $(repo list | awk '{print $1}' | grep 'legato/' | sed 's^legato/^^g' | grep -Ev "$REPO_EXCLUDE_PATTERN"); do
+    CopyRepo $repo
+done
+
+cd $LEGATO_ROOT
+
+# Copy PA binaries
+StageComponent() {
+    local comp_name=$1
+    local comp_src=$2
+    local target
+
+    echo "Staging ${comp_name}:"
+
+    for target in "${@:3}"; do
+        if ! echo "$TARGETS" | grep -E $target'(,|$)' > /dev/null; then
+            continue
+        fi
+
+        local src="build/${target}/${comp_src}"
+        local dst="platformAdaptor/qmi/bin/${target}/components/${comp_name}/"
+
+        if ! [ -e "$LEGATO_ROOT/$src" ]; then
+            echo "$src doesn't exist"
+            exit 1
+        fi
+
+        local toolchain_dir_env="${target^^}_TOOLCHAIN_DIR"
+        local toolchain_dir="${!toolchain_dir_env}"
+        if [ -z "$toolchain_dir" ]; then
+            toolchain_dir=$(framework/tools/scripts/findtoolchain $target)
+        fi
+
+        if [ -z "$toolchain_dir" ]; then
+            echo "$toolchain_dir_env not set and unable to find one"
+            exit 1
+        fi
+
+        local toolchain_prefix_env="${target^^}_TOOLCHAIN_PREFIX"
+        local toolchain_prefix="${!toolchain_prefix_env}"
+        if [ -z "$toolchain_prefix" ]; then
+            toolchain_prefix="$(find $toolchain_dir -name "*gcc" | xargs basename | sed 's/gcc//g' 2> /dev/null)"
+        fi
+
+        echo "        (target $target) = $src -> $dst"
+        install -D $LEGATO_ROOT/$src $STAGE_DIR/$dst
+        if [ $? -ne 0 ]; then
+            ExitWithError "Unable to copy '$src'"
+        fi
+
+        $toolchain_dir/${toolchain_prefix}strip -s $STAGE_DIR/${dst}/libComponent_${comp_name}.so
+        if [ $? -ne 0 ]; then
+            ExitWithError "Unable to strip '$STAGE_DIR/${dst}/libComponent_${comp_name}.so'"
+        fi
+    done
+}
+
+StagePaComponent() {
+    local comp_name=$1
+    local service=$2
+
+    local comp_src="system/app/$service/staging/read-only/lib/libComponent_$comp_name.so"
+
+    StageComponent $comp_name $comp_src "${@:3}"
+}
+
+StageProprietaryApp() {
+    local app_name=$1
+    local target
+
+    echo "Staging app ${app_name}:"
+
+    for target in "${@:2}"; do
+        if ! echo "$TARGETS" | grep -E $target'(,|$)' > /dev/null; then
+            continue
+        fi
+
+        local src="build/${target}/proprietary/${app_name}/${app_name}.${target}.app"
+        local dst="apps/proprietary/${app_name}/bin/${target}/${app_name}.${target}.app"
+
+        echo -n "        (target $target) = $src -> $dst"
+
+        # If package is already available, do not replace the .app file unless
+        # the content has changed.
+        if [ -e "$dst" ]; then
+            # Creates a temporary directory in which both tarball are extracted.
+            local tmpdir=$(mktemp -d --suffix="releaselegato")
+            mkdir "$tmpdir/src" "$tmpdir/dst"
+
+            if ! tar jxf $src -C "$tmpdir/src" ||
+               ! tar jxf $dst -C "$tmpdir/dst"; then
+                rm -rf $tmpdir
+                ExitWithError "Error while extracting $app_name"
+            fi
+
+            # The content of the directory is then compared.
+            diff -r "$tmpdir/src" "$tmpdir/dst" >/dev/null 2>&1
+            local diffret=$?
+            #rm -rf "$tmpdir"
+
+            if [ $diffret -eq 0 ]; then
+                echo " (skipped)"
+                continue
+            fi
+        fi
+
+        echo
+        install -D $LEGATO_ROOT/$src $STAGE_DIR/$dst
+        if [ $? -ne 0 ]; then
+            ExitWithError "Unable to copy '$src'"
+        fi
+    done
+}
+
+StagePaComponent swiQmi          modemService        ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa_audio     audioService        ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa           modemService        ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa_ecall     modemService        ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa_remotesim modemService        ar758x ar759x
+StagePaComponent le_pa_gnss      positioningService  ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa_avc       avcService          ar7
+StagePaComponent le_pa_secStore  secStore            ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa_fwupdate  fwupdateService     ar7 wp85 ar758x ar759x wp76xx
+StagePaComponent le_pa_uartMode  tools               ar7 wp85 ar758x ar759x wp76xx
+
+if [ -e "$LEGATO_ROOT/build/wp85/system/app/avcCompat" ]; then
+    StagePaComponent le_pa_avc       avcCompat           wp85
+elif [ -e "$LEGATO_ROOT/build/wp85/system/app/avcService" ]; then
+    StagePaComponent le_pa_avc       avcService          wp85
+fi
+
+if [ -e "$LEGATO_ROOT/apps/proprietary/atQmiLinker" ]; then
+    StageProprietaryApp atQmiLinker     wp85 wp76xx
+fi
+if [ -e "$LEGATO_ROOT/apps/proprietary/atAirVantage" ]; then
+    StageProprietaryApp atAirVantage    wp85 wp76xx
+fi
+if [ -e "$LEGATO_ROOT/apps/proprietary/qmiAirVantage" ]; then
+    StageProprietaryApp qmiAirVantage   wp85 wp76xx
+fi
+
+cp version $STAGE_DIR
+cp package.properties $STAGE_DIR
+
+# Target aliases
+for alias in $(echo $TARGETS | tr ',' ' '); do
+    unset target
+    case $alias in
+        ar86)           target=ar7 ;;
+        wp750x)         target=wp85 ;;
+        wp77xx)         target=wp76xx ;;
+    esac
+
+    if [ -n "$target" ]; then
+        echo "Aliasing $alias to $target"
+        ln -s "$target" "$STAGE_DIR/platformAdaptor/qmi/bin/$alias"
+
+        for app in $(ls -1 "$STAGE_DIR/apps/proprietary"); do
+            if [ -e "$STAGE_DIR/apps/proprietary/$app/bin/$target" ]; then
+                ln -s "$target" "$STAGE_DIR/apps/proprietary/$app/bin/$alias"
+            fi
+        done
+    fi
+done
+
+# Remove existing git folders
+for gitdir in $(find $STAGE_DIR -name ".git"); do
+    echo "Removing $gitdir"
+    rm -rf $gitdir
+done
+
+# Update default RELEASE_TARGETS
+sed -i "s/RELEASE_TARGETS := .*/RELEASE_TARGETS := $(echo $TARGETS | tr ',' ' ')/" $STAGE_DIR/Makefile
+
+echo "Creating release package $RELEASE_DIR/$PKG_NAME"
+rm -f $RELEASE_DIR/$PKG_NAME
+cd $RELEASE_DIR && tar jcf $PKG_NAME $STAGE_NAME
+
+echo "Creating symlink as $PKG_NAME_LINK"
+rm -f $RELEASE_DIR/$PKG_NAME_LINK
+ln -s $PKG_NAME $RELEASE_DIR/$PKG_NAME_LINK
+
+# Copy images
+CopyImages() {
+    local target=$1
+
+    for file in $(find build/$target -maxdepth 1 -regextype sed -regex '.*legato.*\.\(cwe\|yaffs2\|ubi\)'); do
+        IMG_FULLNAME=$(basename $file)
+        IMG_NAME="${IMG_FULLNAME%.*}"
+        IMG_EXT="${IMG_FULLNAME##*.}"
+
+        DST_NAME="${IMG_NAME}-${target}-${VERSION}.${IMG_EXT}"
+        DST_NAME_LINK="${IMG_NAME}-${target}.${IMG_EXT}"
+
+        echo "Copying image as $DST_NAME"
+        cp $file $RELEASE_DIR/$DST_NAME
+
+        echo "Creating symlink as $DST_NAME_LINK"
+        rm -f $RELEASE_DIR/$DST_NAME_LINK
+        ln -s $DST_NAME $RELEASE_DIR/$DST_NAME_LINK
+    done
+}
+
+cd $LEGATO_ROOT
+for target in $(echo $TARGETS | tr ',' ' '); do
+    CopyImages $target
+done

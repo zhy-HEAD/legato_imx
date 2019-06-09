@@ -1,0 +1,71 @@
+sources:
+{
+    supervisor.c
+    resourceLimits.c
+    apps.c
+    app.c
+    proc.c
+    watchdogAction.c
+    frameworkDaemons.c
+    kernelModules.c
+    devSmack.c
+    wait.c
+    ../common/frameworkWdog.c
+    ../common/ima.c
+}
+
+provides:
+{
+    api:
+    {
+        le_appCtrl.api                              [async] [manual-start]
+        le_framework.api                            [async] [manual-start]
+        wdog.api                                    [async] [manual-start]
+        le_appInfo.api                                      [manual-start]
+        le_appProc.api                                      [manual-start]
+        le_ima.api                                          [manual-start]
+        le_sup_ctrl.api                             [async] [manual-start]
+        le_kernelModule.api                                 [manual-start]
+        supervisorWdog = watchdog/frameworkWdog.api         [manual-start]
+    }
+}
+
+requires:
+{
+    api:
+    {
+        le_cfg.api              [manual-start]
+        logDaemon/logFd.api     [manual-start]
+        le_instStat.api         [manual-start]
+    }
+}
+
+cflags:
+{
+    #if ${LEGATO_TARGET_ARCH} = i686
+        -DTARGET_IMPORTS_X86
+    #elif ${LEGATO_TARGET_ARCH} = x86_64
+        -DTARGET_IMPORTS_X86_64
+    #elif ${LEGATO_TARGET_ARCH} = armv6
+        -DTARGET_IMPORTS_ARMV6
+    #elif ${LEGATO_TARGET_ARCH} = armv7
+        -DTARGET_IMPORTS_ARMV7
+    #elif ${LEGATO_TARGET} = virt-x86
+        -DTARGET_IMPORTS_X86
+    #elif ${LEGATO_TARGET} = virt-arm
+        -DTARGET_IMPORTS_ARMV7
+    #elif ${LEGATO_TARGET} = raspi
+        #if ${RASPI_TOOLCHAIN_PREFIX} = arm-poky-linux-gnueabi-
+            -DTARGET_IMPORTS_ARMV6
+        #else
+            -DTARGET_IMPORTS_RASPI
+        #endif
+    #else
+        -DTARGET_IMPORTS_ARMV7
+    #endif
+}
+
+cflags:
+{
+    -DFRAMEWORK_WDOG_NAME=supervisorWdog
+}

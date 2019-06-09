@@ -1,0 +1,82 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+# Specify default values for environment variables if they are unset.
+: ${TZDIR=/usr/share/zoneinfo}
+
+help_short_desc="set the timezone on target"
+
+help_usage=(
+"[TARGET_IP]"
+"-u|utc [TARGET_IP]"
+"-s|select [TARGET_IP]"
+)
+
+help_long_description=(
+"$commandName [TARGET_IP]"
+"  - Set target to the same timezone as the host machine"
+""
+"$commandName -u|utc [TARGET_IP]"
+"  - Set target to UTC timezone"
+""
+"$commandName -s|select [TARGET_IP]"
+"  - Use tzselect to pick a timezone from the known timezones"
+)
+
+CheckForHelp $@
+
+#default timezone file
+timezone_file="no_timezone_file"
+dest_file="/etc/localtime"
+
+
+# Parse the args
+if [ $1 ]; then
+    case $1 in
+    -s|select)
+        IpAddr=$2
+        # extra check here - make sure good IP addr before user spends time
+        # selecting a time zone
+        SetTargetIP $IpAddr
+        Tz=$(tzselect)
+        ;;
+    -u|utc|none)
+        IpAddr=$2
+        Tz="UTC"
+        ;;
+    *)
+        IpAddr=$1
+        Tz="mine"
+        ;;
+    esac
+else
+    Tz="mine"
+fi
+
+SetTargetIP $IpAddr
+
+case $Tz in
+UTC*)
+    echo "Setting target timezone to UTC"
+    SshToTarget rm -f ${dest_file} 2>/dev/null
+    exit 0
+    ;;
+mine)
+    echo "Setting target timezone same as host"
+    timezone_file="/etc/localtime"
+    ;;
+*)
+    echo "Setting target timezone to ${Tz}"
+    timezone_file="/usr/share/zoneinfo/${Tz}"
+    ;;
+esac
+
+if [ -f $timezone_file ]; then
+    ScpToTarget $timezone_file ${dest_file}
+else
+    ExitWithError "Unknown timezone ${Tz}"
+fi

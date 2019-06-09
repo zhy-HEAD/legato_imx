@@ -1,0 +1,18 @@
+sources:
+{
+    le_ecallTest.c
+}
+
+requires:
+{
+    api:
+    {
+        le_cfg.api
+        le_ecall.api
+    }
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/cfgEntries
+}

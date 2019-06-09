@@ -1,0 +1,35 @@
+sources:
+{
+    avcCompat.c
+    avcObject.c
+    lwm2m.c
+    avcShared.c
+    ${LEGATO_ROOT}/components/airVantage/avcDaemon/assetData.c
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/airVantage/platformAdaptor/inc
+    -I${LEGATO_ROOT}/components/airVantage/avcDaemon
+    -I$LEGATO_ROOT/framework/liblegato
+    -I${LEGATO_ROOT}/components/appCfg
+    -I${LEGATO_ROOT}/3rdParty/tinycbor/src
+}
+
+requires:
+{
+    api:
+    {
+        airVantage/le_avc.api [manual-start]
+        le_appCtrl.api
+        le_cfg.api
+        le_appInfo.api
+    }
+
+    component:
+    {
+        $LEGATO_ROOT/components/appCfg
+        $LEGATO_AVC_PA_DEFAULT
+        $LEGATO_AVC_PA
+    }
+}

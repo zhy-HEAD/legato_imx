@@ -1,0 +1,19 @@
+sources:
+{
+    logDaemon.c
+    ../common/frameworkWdog.c
+}
+
+provides:
+{
+    api:
+    {
+        logDaemon/logFd.api
+        logDaemonWdog = watchdog/frameworkWdog.api
+    }
+}
+
+cflags:
+{
+    -DFRAMEWORK_WDOG_NAME=logDaemonWdog
+}

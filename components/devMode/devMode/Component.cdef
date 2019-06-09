@@ -1,0 +1,15 @@
+requires:
+{
+    api:
+    {
+        le_pm.api
+        le_updateCtrl.api
+        le_instStat.api
+        le_framework.api
+    }
+}
+
+sources:
+{
+    devMode.c
+}

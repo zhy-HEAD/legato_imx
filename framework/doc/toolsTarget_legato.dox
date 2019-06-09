@@ -1,0 +1,40 @@
+/** @page toolsTarget_legato legato
+
+Use the @c legato tool to control the Legato Application Framework.
+
+<h1>Usage</h1>
+
+<b><c> legato [start|stop|restart|status|version|help]</c></b>
+
+@verbatim legato start @endverbatim
+
+> Starts the Legato Application Framework.
+
+@verbatim legato stop @endverbatim
+
+> Stops the Legato Application Framework.
+
+@verbatim legato restart @endverbatim
+
+> Restarts the Legato Application Framework.
+
+@verbatim legato status @endverbatim
+
+> Displays the current running state (started, stopped), system state (good, bad, probation) and
+system index of Legato.
+
+@verbatim legato version @endverbatim
+
+> Displays the current installed version.
+
+@verbatim legato help @endverbatim
+
+> Displays usage help.
+
+
+
+<HR>
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

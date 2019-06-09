@@ -1,0 +1,43 @@
+
+provides:
+{
+    api:
+    {
+        airVantage/legacy/le_avc.api
+        airVantage/legacy/le_avdata.api
+    }
+}
+
+sources:
+{
+    assetData.c
+    lwm2m.c
+    avData.c
+    avcServer.c
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/airVantage/platformAdaptor/inc
+    -I${LEGATO_ROOT}/framework/liblegato    // TODO: Remove this encapsulation breakage.
+}
+
+ldflags:
+{
+    ${LDFLAG_LEGATO_TIMESERIES}
+}
+
+requires:
+{
+    api:
+    {
+        le_cfg.api
+        le_appInfo.api
+    }
+
+    component:
+    {
+        $LEGATO_AVC_PA_DEFAULT
+        $LEGATO_AVC_PA
+    }
+}

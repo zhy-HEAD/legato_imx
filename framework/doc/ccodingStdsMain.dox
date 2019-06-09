@@ -1,0 +1,17 @@
+/** @page ccodingStdsMain C Language Standards
+
+
+Coding standards are important tools in achieving high quality, consistent, maintainable code.  This
+coding standard attempts to achieve these goals by giving guidelines to reduce code complexity,
+enhance security, and improve readability.  Conformance to this coding standard is mandatory for
+anyone contributing code to the Legato AF.
+
+| Coding Standard                | Description                                           |
+|--------------------------------|-------------------------------------------------------|
+| @subpage ccodingStdsComplexity | Guidelines on coding standard to reduce complexity    |
+| @subpage ccodingStdsSecurity   | Guidelines on coding standards to enhance security    |
+| @subpage ccodingStdsFormat     | Guidelines on coding standards to improve readability |
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

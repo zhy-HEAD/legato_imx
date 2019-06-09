@@ -1,0 +1,12 @@
+requires:
+{
+    api:
+    {
+        le_voicecall.api              [types-only]
+    }
+}
+
+sources:
+{
+    main.c
+}

@@ -1,0 +1,120 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_wdog Watchdog Service
+ *
+ * @ref le_wdog_interface.h "Type/Function Reference"
+ *
+ * @section Watchdog Service
+ *
+ * Provides an API for monitoring critical applications and services for deadlocks and other
+ * similar faults.  The watchdog for a process is started by calling @c le_wdog_Kick or
+ * @c le_wdog_Timeout.  Once started, the watchdog must be kicked periodically by calling
+ * @c le_wdog_Kick.  If the watchdog is not kicked (because it is deadlocked, for example),
+ * the watchdog service will attempt to recover the service by killing the process and
+ * executing the action specified in the process' watchdogAction (if specified)
+ * otherwise its faultAction.
+ *
+ * Generally a service which uses the watchdog should set @c watchdogTimeout to give the
+ * default timeout, and @c watchdogAction to give a recovery action.
+ *
+ * Critical services should also set @c maxWatchdogTimeout.  In this case the watchdog
+ * will be started on system boot, and cannot be stopped or set
+ * longer than the timeout given in @c maxWatchdogTimeout.  This ensures the service is
+ * always running as long as the system is running.
+ *
+ * @note If maxWatchdogTimeout is not set, no more action is taken if performing the process'
+ * @c watchdogAction doesn't recover the process.  If @c maxWatchdogTimeout is specified the
+ * system will be rebooted if the process does not recover.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------------------------------
+/**
+ * @file le_wdog_interface.h
+ *
+ * Legato @ref c_wdog include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//-------------------------------------------------------------------------------------------------
+
+
+//-------------------------------------------------------------------------------------------------
+/**
+ * Special values that have specific meaning when used as durations in Timeout():
+ * - @ref LE_WDOG_TIMEOUT_NEVER
+ * - @ref LE_WDOG_TIMEOUT_NOW
+ */
+//-------------------------------------------------------------------------------------------------
+
+/**
+ * Suspend the watchdog so that it never times out.
+ */
+DEFINE TIMEOUT_NEVER = -1;
+
+/**
+ * Timeout immediately
+ */
+DEFINE TIMEOUT_NOW = 0;
+
+/**
+ * External watchdog kick handler
+ */
+HANDLER ExternalWatchdogHandler
+(
+);
+
+//-------------------------------------------------------------------------------------------------
+/**
+ * Kicks the watchdog timer.
+ *
+ * Once the watchdog has been kicked it must be kicked again before the expiration of the current
+ * effective timeout else the configured WatchdogAction will be executed.
+ */
+//-------------------------------------------------------------------------------------------------
+FUNCTION Kick
+(
+);
+
+//-------------------------------------------------------------------------------------------------
+/**
+ * Set a time out.
+ *
+ * The watchdog is kicked and a new effective timeout value is set. The new timeout will be
+ * effective until the next kick at which point it will revert to the original value.
+ */
+//-------------------------------------------------------------------------------------------------
+FUNCTION Timeout
+(
+    int32 milliseconds IN ///< The number of milliseconds until this timer expires
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the watchdog timeout configured for this process
+ *
+ * @return
+ *      - LE_OK            The watchdog timeout is configured and returned
+ *      - LE_NOT_FOUND     The watchdog timeout is not set
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetWatchdogTimeout
+(
+    uint64 milliseconds OUT        ///< The watchdog timeout set for this process
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the max watchdog timeout configured for this process
+ *
+ * @return
+ *      - LE_OK            The max watchdog timeout is configured and returned
+ *      - LE_NOT_FOUND     The max watchdog timeout is not set
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetMaxWatchdogTimeout
+(
+    uint64 milliseconds OUT        ///< The max watchdog timeout set for this process
+);

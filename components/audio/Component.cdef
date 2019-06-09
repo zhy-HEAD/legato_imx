@@ -1,0 +1,42 @@
+provides:
+{
+    api:
+    {
+        le_audio.api
+    }
+}
+
+sources:
+{
+    le_audio.c
+    le_media.c
+}
+
+cflags:
+{
+    -I$CURDIR
+    -I$CURDIR/platformAdaptor/inc
+    -I${LEGATO_ROOT}/components/watchdogChain
+}
+
+requires:
+{
+    component:
+    {
+        $LEGATO_AUDIO_PA_DEFAULT
+        $LEGATO_AUDIO_PA
+
+        $LEGATO_AUDIO_PA_PCM_DEFAULT
+        $LEGATO_AUDIO_PA_PCM
+
+        $LEGATO_AUDIO_PA_AMR_DEFAULT
+        $LEGATO_AUDIO_PA_AMR
+
+        $LEGATO_ROOT/components/watchdogChain
+    }
+
+    api:
+    {
+        le_pm.api
+    }
+}

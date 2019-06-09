@@ -1,0 +1,31 @@
+provides:
+{
+    api:
+    {
+        portService/le_port.api
+    }
+}
+
+requires:
+{
+    api:
+    {
+        atServices/le_atServer.api
+    }
+
+    component:
+    {
+        ${LEGATO_ROOT}/components/watchdogChain
+    }
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/watchdogChain
+    -I${LEGATO_ROOT}/components/portService/portDaemon/
+}
+
+sources:
+{
+    le_port.c
+}

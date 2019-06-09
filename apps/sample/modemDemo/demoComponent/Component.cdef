@@ -1,0 +1,24 @@
+requires:
+{
+    api:
+    {
+        modemServices/le_sms.api
+        modemServices/le_mrc.api
+        modemServices/le_mdc.api
+        modemServices/le_sim.api
+        le_data.api
+    }
+}
+
+provides:
+{
+    api:
+    {
+        send = send_util.api
+    }
+}
+
+sources:
+{
+    demo.c
+}

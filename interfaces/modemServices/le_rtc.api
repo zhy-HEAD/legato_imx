@@ -1,0 +1,82 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_rtc User Timebase
+ *
+ * @ref le_rtc_interface.h "API Reference" <br>
+ * @ref howToSetUserTimebase how-to
+ * <HR>
+ *
+ * This API provides definitions to read and set the @e user timebase for a target's real time clock (RTC).
+ *
+ * Usually, the time daemon automatically updates the system time (i.e., gets time value
+ * when calling le_clk_GetAbsoluteTime() or using Linux @c date command). In some cases, the RTC
+ * time value may require a user timebase value based on other domains (e.g., GPS) to offset
+ * differences between the battery-powered RTC and the system time.
+ *
+ * If you're synchronizng with cellular network time only, the time daemon will update the
+ * system time (the time you get when calling le_clk_GetAbsoluteTime() or using linux 'date'
+ * command) automatically.
+ *
+ * @section c_rtc_disableDaemon Disable Time Daemon
+
+ * If you need to set the system time from a saved user timebase value, first disable the time
+ * daemon by commenting out the
+ * @c TIME_SERVICES="qcom_time" line in @c /etc/time_service.conf to prevent the system time from being
+ * updated if the modem receives a new time from a cellular network.
+ *
+ * @section c_rtc_getSet Get/Set Time Value
+ *
+ * You use le_rtc_GetUserTime() to read the current RTC time, and le_rtc_SetUserTime()
+ * to set the user timebase adjustment (plus/minus in milliseconds).
+ *
+ * The time stored in the user timebase is incremented on a millisecond basis;
+ * Unix time is incremented by the second. When storing Unix time in the user timebase, it
+ * must be multiplied by 1000, and must be divided by 1000 when retrieved.
+ *
+ * Typically, it's sufficient to use Unix epoch time x 1000 as the time base.
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_rtc_interface.h
+ *
+ * Legato @ref c_rtc include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the current time from the RTC
+ *
+ * @return
+ *      - LE_OK            Function succeeded.
+ *      - LE_FAULT         Function failed.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetUserTime
+(
+    uint64   millisecondsPastGpsEpoch OUT
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the RTC with the given time string
+ *
+ * @return
+ *      - LE_OK            Function succeeded.
+ *      - LE_FAULT         Function failed.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetUserTime
+(
+    uint64   millisecondsPastGpsEpoch IN
+);
+

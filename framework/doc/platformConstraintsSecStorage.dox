@@ -1,0 +1,8 @@
+/** @page platformConstraintsSecStorage Secure Storage
+
+The total space and the available free space in secure storage can be retrived with
+secStoreAdmin_GetTotalSpace() function of @ref c_secStoreAdmin "Secure Storage Admin API".
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

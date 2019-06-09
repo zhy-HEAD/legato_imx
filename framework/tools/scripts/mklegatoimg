@@ -1,0 +1,579 @@
+#!/bin/bash
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+help_short_desc="create Legato image partition"
+
+help_usage=(
+"[OPTIONS]"
+)
+
+help_long_description=(
+"Generate a partition for a Legato target."
+""
+"Options:"
+" - -t [TARGET]: target the image should be generated for (ar7, ...)"
+" - -d [STAGING_DIR]: staging directory for that platform"
+" - -o [OUTPUT_DIR]: output directory where the image will be stored"
+" - -S [SUFFIX]: suffix to add to images generated in case of several images"
+" - -a: set SMACK attributes as defined externally through SMACK_ATTR_NAME & SMACK_ATTR_VALUE"
+" - -s: strip libraries and binaries but preserve kernel modules"
+""
+"For ar7/ar86/wp85/wp750x/wp76xx/wp77xx targets:"
+""
+"   This creates a partition that you can use with fwupdate or airvantage"
+"   to update the legato within your target."
+)
+
+CheckForHelp $@
+
+CheckRet() {
+    RETVAL=$?
+    if [ $RETVAL -ne 0 ]; then
+        echo "Exit Code $RETVAL"
+        exit $RETVAL
+    fi
+}
+
+while getopts ":t:o:d:v:S:sa" arg
+do
+    case $arg in
+    t)
+        TARGET=$OPTARG
+        ;;
+    d)
+        STAGING_DIR=$(readlink -f $OPTARG)
+        ;;
+    o)
+        OUTPUT_DIR=$(readlink -f $OPTARG)
+        ;;
+    v)
+        VERSION=$OPTARG
+        ;;
+    S)
+        LEGATO_IMG_SUFFIX=$OPTARG
+        ;;
+    s)
+        STRIP_STAGING_TREE=true
+        ;;
+    a)
+        SET_SMACK_ATTR=true
+        ;;
+    ?)
+        echo "$0: invalid option -$OPTARG"
+        usage_and_exit 1
+        ;;
+    esac
+done
+
+if [ -z "$VERSION" ]; then
+    if [ -z "$LEGATO_ROOT" ]; then
+        echo "Unable to determine version"
+        exit 1
+    fi
+
+    VERSION="$(cat $LEGATO_ROOT/version)"
+    if [ -e "$LEGATO_ROOT/.git" ]; then
+        VERSION="$VERSION $(git rev-parse --short HEAD)"
+    fi
+    VERSION="$VERSION $(hostname) $(date +'%Y/%m/%d %H:%M:%S')"
+fi
+
+if [ -z "$TARGET" ]; then
+    echo "Target (-t) not set"
+    exit 1
+fi
+
+FindToolchain
+
+CheckFakerootVersion() {
+    local fakeroot_bin=$1
+    local fakeroot_version
+    fakeroot_version=$($fakeroot_bin --version | awk '{print $3}')
+    local required_version="1.20.2"
+    [ "$required_version" = "$(echo -e "$required_version\n$fakeroot_version" | sort -V | head -1)" ]
+}
+
+# Need to appear as root to prepare images
+if [ $(id -u) -ne 0 ]; then
+    FindTool "fakeroot" FAKEROOT
+    if [ $? -eq 0 ]; then
+        CheckFakerootVersion $FAKEROOT
+        if [ $? -eq 0 ]; then
+            echo "Using fakeroot $FAKEROOT ..."
+            $FAKEROOT $0 $*
+            exit $?
+        fi
+    fi
+else
+    echo $*
+fi
+
+echo "Target: $TARGET"
+
+if [ -z "$STAGING_DIR" ]; then
+    echo "Staging dir (-d) not set"
+    exit 1
+fi
+echo "Input: $STAGING_DIR"
+
+if [ -z "$OUTPUT_DIR" ]; then
+    echo "Output dir (-o) not set"
+    exit 1
+fi
+echo "Output: $OUTPUT_DIR"
+
+echo "Version: $VERSION"
+
+StripExeAndLibs() {
+    if [[ "$STRIP_STAGING_TREE" != "true" ]]; then
+        return
+    fi
+
+    PATH="${TOOLCHAIN_DIR}:${PATH}"
+
+    FindTool "${TOOLCHAIN_PREFIX}strip" STRIP
+    CheckRet
+
+    FindTool "${TOOLCHAIN_PREFIX}nm" NM
+    CheckRet
+
+    for file in $(find $STAGING_DIR -type f); do
+        if [ -n "$(${NM} ${file} 2>/dev/null)" ]; then
+            echo "Stripping $file"
+            case "$file" in
+                *.ko)
+                    ${STRIP} --strip-unneeded ${file}
+                    ;;
+                *)
+                    ${STRIP} ${file}
+                    ;;
+            esac
+        fi
+    done
+}
+
+GenerateUbinizeCfg() {
+    local image_path=$1
+    local ubinize_cfg_path=$2
+    if [[ "$WITH_DM_VERITY" == "true" ]]; then
+        local hash_path=$3
+        local rhbin_path=$4
+    fi
+
+    rm -f $ubinize_cfg_path
+    touch $ubinize_cfg_path
+    echo "[legato-volume]" >> $ubinize_cfg_path
+    echo "mode=ubi" >> $ubinize_cfg_path
+    echo "image=$image_path" >> $ubinize_cfg_path
+    echo "vol_id=0" >> $ubinize_cfg_path
+    echo "vol_name=legato" >> $ubinize_cfg_path
+
+    if [[ "$WITH_DM_VERITY" == "true" ]]; then
+        if [ -n "${hash_path}" ] ; then
+            echo "vol_type=static" >> $ubinize_cfg_path
+        else
+            echo "vol_type=dynamic" >> $ubinize_cfg_path
+            echo "vol_flags=autoresize" >> $ubinize_cfg_path
+        fi
+
+        if [ -n "${hash_path}" ] ; then
+            echo "[hash-volume]" >> $ubinize_cfg_path
+            echo "mode=ubi" >> $ubinize_cfg_path
+            echo "image=$hash_path" >> $ubinize_cfg_path
+            echo "vol_id=1" >> $ubinize_cfg_path
+            echo "vol_type=static" >> $ubinize_cfg_path
+            echo "vol_name=legato_hs" >> $ubinize_cfg_path
+
+            if [ -n "${rhbin_path}" ] ; then
+                echo "[rh-volume]" >> $ubinize_cfg_path
+                echo "mode=ubi" >> $ubinize_cfg_path
+                echo "image=$rhbin_path" >> $ubinize_cfg_path
+                echo "vol_id=2" >> $ubinize_cfg_path
+                echo "vol_type=static" >> $ubinize_cfg_path
+                echo "vol_name=legato_rhs" >> $ubinize_cfg_path
+            fi
+
+        fi
+    fi
+}
+
+GetRootHash() {
+    local root_hash=$1
+    local rhbin=$2
+    local rh=$(cat $root_hash | grep Root | awk -F' ' '{printf $3}')
+    echo ${rh} > ${rhbin}
+}
+
+SetSmackAttr() {
+    FindTool "setfattr" SETFATTR
+    CheckRet
+
+    # If SMACK attributes are provided, set them
+    if [[ "$SET_SMACK_ATTR" == "true" ]]; then
+        if [ -n "$LE_CONFIG_SMACK_ATTR_NAME" ] && \
+           [ -n "$LE_CONFIG_SMACK_ATTR_VALUE" ]; then
+            for file in `find "$STAGING_DIR"`; do
+                if [ -d "$file" ]; then
+                    $SETFATTR -h -n "$LE_CONFIG_SMACK_ATTR_NAME" -v "$LE_CONFIG_SMACK_ATTR_VALUE" "$file"
+                elif [ -f "$file" -a ! -h "$file" ]; then
+                    $SETFATTR -n "$LE_CONFIG_SMACK_ATTR_NAME" -v "$LE_CONFIG_SMACK_ATTR_VALUE" "$file"
+                elif [ -f "$file" -a -h "$file" ]; then
+                    $SETFATTR -h -n "$LE_CONFIG_SMACK_ATTR_NAME" -v "$LE_CONFIG_SMACK_ATTR_VALUE" "$file"
+                fi
+            done
+        else
+            echo "Expected SMACK attributes as env. variables LE_CONFIG_SMACK_ATTR_NAME & LE_CONFIG_SMACK_ATTR_VALUE."
+        fi
+    elif [ ! -e "$STAGING_DIR/SMACK_DISABLED" ]; then
+        # Default smack label for all files in the image
+        find "$STAGING_DIR" -exec $SETFATTR -h -n "security.SMACK64" -v "_" {} \;
+
+        # The following on-target executable should execute as 'admin'
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "admin" "$STAGING_DIR/system/bin/start"
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "admin" "$STAGING_DIR/system/bin/startSystem"
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "admin" "$STAGING_DIR/system/bin/updateDaemon"
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "admin" "$STAGING_DIR/system/bin/supervisor"
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "admin" "$STAGING_DIR/system/bin/_appStopClient"
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "admin" "$STAGING_DIR/system/bin/xattr"
+
+        # The following on-target executable should execute as 'framework'
+        $SETFATTR -h -n "security.SMACK64EXEC" -v "framework" "$STAGING_DIR/system/bin/sdir"
+    fi
+}
+
+CreateImgFs() {
+    local img_type=${1:-yaffs2}
+    local img_suffix=${2:-$img_type}
+    local ubi_img_type=${3:-squashfs}
+    local page_size=${4:-4096}
+    local oob_size=$5
+    local peb_size=$6
+
+    echo "$TARGET: Generating the framework image ($img_suffix)"
+
+    if [ -z "$TOOLCHAIN_DIR" ]; then
+        echo "Unable to find toolchain"
+        exit 1
+    fi
+
+    if [[ "$img_type" != "yaffs2" ]]; then
+        SetSmackAttr
+    fi
+
+    if [[ "$WITH_DM_VERITY" == "true" ]]; then
+        local hash_img="$OUTPUT_DIR/hash${LEGATO_IMG_SUFFIX}.bin"
+        local rhbin="$OUTPUT_DIR/rhash${LEGATO_IMG_SUFFIX}.bin"
+    fi
+
+    local legato_img="$OUTPUT_DIR/legato${LEGATO_IMG_SUFFIX}.$img_suffix"
+
+    local temp_dir="$OUTPUT_DIR/legatoimg/$img_type"
+    mkdir -p $temp_dir
+
+    cd $temp_dir
+
+    case $img_type in
+        yaffs2)
+            FindTool "mkyaffs2image" MKYAFFS2
+            CheckRet
+
+            $MKYAFFS2 -c $page_size -s $oob_size "$STAGING_DIR" "$legato_img" > yaffs2${LEGATO_IMG_SUFFIX}.log
+            CheckRet
+            ;;
+
+        ubifs)
+            FindTool "mkfs.ubifs" MKUBIFS
+            if [ $? -ne 0 ]; then
+                echo "Warning: Unable to produce ubifs image: mkfs.ubifs needed"
+                return 1
+            fi
+
+            $MKUBIFS -r "$STAGING_DIR" -o "$legato_img" -m $page_size -e $LAB_SIZE -c $MAX_LEB_COUNT -F > ubifs${LEGATO_IMG_SUFFIX}.log
+            CheckRet
+            ;;
+
+        squashfs)
+            FindTool "mksquashfs" MKSQUASHFS
+            if [ $? -ne 0 ]; then
+                echo "Warning: Unable to produce squashfs image: mksquashfs needed"
+                return 1
+            fi
+
+            $MKSQUASHFS "$STAGING_DIR" "$legato_img" -noappend \
+                                                     -all-root \
+                                                     -xattrs \
+                                                     > squashfs${LEGATO_IMG_SUFFIX}.log
+            CheckRet
+
+            if [[ "$WITH_DM_VERITY" == "true" ]]; then
+                CreateImgFs hash_bin squashfs
+                CheckRet
+            fi
+            ;;
+
+        ubi)
+            CreateImgFs ${ubi_img_type} ${ubi_img_type} "" ${page_size} $oob_size $peb_size
+
+            FindTool "ubinize" UBINIZE
+            if [ $? -ne 0 ]; then
+                echo "Warning: Unable to produce ubi image: ubinize needed"
+                return 1
+            fi
+
+            if [[ "$WITH_DM_VERITY" == "true" ]]; then
+                GenerateUbinizeCfg $LEGATO_IMG ${temp_dir}/ubinize.cfg $hash_img ${rhbin}
+            else
+                GenerateUbinizeCfg $LEGATO_IMG ${temp_dir}/ubinize.cfg
+            fi
+
+            # Set a fixed sequence number for UBI image
+            $UBINIZE -o $legato_img -m $page_size -p $peb_size -s $page_size \
+                ${temp_dir}/ubinize.cfg > ubinize${LEGATO_IMG_SUFFIX}.log
+            CheckRet
+            ;;
+
+        hash_bin)
+            FindTool "veritysetup" VERITYSETUP
+            if [ $? -ne 0 ]; then
+                echo "Warning: Unable to produce hash bin image: veritysetup tools needed"
+                return 1
+            fi
+
+            $VERITYSETUP format $OUTPUT_DIR/legato${LEGATO_IMG_SUFFIX}.$ubi_img_type $hash_img > hash_bin${LEGATO_IMG_SUFFIX}.log
+            CheckRet
+
+            GetRootHash hash_bin${LEGATO_IMG_SUFFIX}.log ${rhbin}
+            CheckRet
+            ;;
+
+        *)
+            echo "Unknown image type '$img_type'"
+            exit 1
+            ;;
+    esac
+
+    export LEGATO_IMG=$legato_img
+}
+
+GenerateCwe() {
+    local img_path=$1
+    local img_suffix=${2:-yaffs2}
+    local pid=$3
+
+    echo "$TARGET: Generating the framework cwe ($img_suffix)"
+
+    if ! [ -f ${img_path} ] ; then
+        echo "$TARGET: $img_path does not exist"
+        exit 1
+    fi
+
+    FindTool "hdrcnv" HDRCNV
+    CheckRet
+
+    FindTool "cwezip" CWEZIP
+    CheckRet
+
+    local temp_dir="$OUTPUT_DIR/legatoimg/$img_suffix"
+    mkdir -p $temp_dir
+
+    cd $temp_dir
+
+    local tmpmbn=$temp_dir/temp.mbn
+    if [ -f ${tmpmbn}${LEGATO_IMG_SUFFIX}.hdr ] ; then rm -f ${tmpmbn}${LEGATO_IMG_SUFFIX}.hdr; fi
+    if [ -f ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe ] ; then rm -f ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe; fi
+    if [ -f ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe.z ] ; then rm -f ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe.z; fi
+    if [ -f legato${LEGATO_IMG_SUFFIX}.cwe ] ; then rm -f legato${LEGATO_IMG_SUFFIX}.cwe; fi
+    if [ -f legato${LEGATO_IMG_SUFFIX}.hdr ] ; then rm -f legato${LEGATO_IMG_SUFFIX}.hdr; fi
+    if [ -f legatoz${LEGATO_IMG_SUFFIX}.cwe ] ; then rm -f legatoz${LEGATO_IMG_SUFFIX}.cwe; fi
+    if [ -f legatoz${LEGATO_IMG_SUFFIX}.hdr ] ; then rm -f legatoz${LEGATO_IMG_SUFFIX}.hdr; fi
+
+    $HDRCNV ${img_path} -OH ${tmpmbn}${LEGATO_IMG_SUFFIX}.hdr -IT USER -PT $PLATFORM -V "$VERSION" -B $COMPAT_BYTE > hdrcnv${LEGATO_IMG_SUFFIX}-tmp.log
+    CheckRet
+
+    cat ${tmpmbn}${LEGATO_IMG_SUFFIX}.hdr ${img_path} > ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe
+    CheckRet
+
+    # legato.cwe
+    $HDRCNV ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe -OH legato${LEGATO_IMG_SUFFIX}.hdr -IT APPL -PT $pid -V "$VERSION" -B $COMPAT_BYTE > hdrcnv-legato${LEGATO_IMG_SUFFIX}.log
+    CheckRet
+
+    cat legato${LEGATO_IMG_SUFFIX}.hdr ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe > $OUTPUT_DIR/legato${LEGATO_IMG_SUFFIX}-${img_suffix}.cwe
+    CheckRet
+
+    # legatoz.cwe
+    if $SUPPORT_COMPRESSION; then
+        $CWEZIP ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe -c -o ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe.z > cwezip${LEGATO_IMG_SUFFIX}.log
+        CheckRet
+
+        $HDRCNV ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe.z -OH legatoz${LEGATO_IMG_SUFFIX}.hdr -IT APPL -PT $pid -V "$VERSION" -B $COMPAT_BYTE > hdrcnv-legatoz${LEGATO_IMG_SUFFIX}.log
+        CheckRet
+
+        cat legatoz${LEGATO_IMG_SUFFIX}.hdr ${tmpmbn}${LEGATO_IMG_SUFFIX}.cwe.z > $OUTPUT_DIR/legatoz${LEGATO_IMG_SUFFIX}-${img_suffix}.cwe
+        CheckRet
+    fi
+}
+
+CreateImg_mdm9x15() {
+    local img_type=${1:-yaffs2}
+    local ubi_img_type=${2:-squashfs}
+
+    local page_size=4096
+    local pid='9X15'
+    local oob_size=160
+    local peb_size=256KiB
+    COMPAT_BYTE=00000001
+    PLATFORM='9X15'
+    SUPPORT_COMPRESSION=true
+
+    case $TARGET in
+        ar7|ar86)
+            pid='A911'
+            ;;
+        wp85|wp750x)
+            pid='Y912'
+            page_size=2048
+            oob_size=64
+            peb_size=128KiB
+            ;;
+        *)
+            echo "Unknown product '$TARGET'"
+            exit 1
+            ;;
+    esac
+
+    local img_suffix=$img_type
+    if [[ "$img_type" == "ubi" ]]; then
+        img_suffix="${ubi_img_type}.${img_type}"
+    fi
+
+    CreateImgFs $img_type $img_suffix $ubi_img_type $page_size $oob_size $peb_size
+    GenerateCwe $LEGATO_IMG $img_suffix $pid
+}
+
+CreateImg_mdm9x28() {
+    local img_type=${1:-ubi}
+    local ubi_img_type=${2:-squashfs}
+
+    local img_indexes=(0)
+    local page_size[0]=4096
+    local pid[0]='9X28'
+    local oob_size[0]=224
+    local peb_size[0]=256KiB
+    COMPAT_BYTE=00000001
+    PLATFORM='9X28'
+    SUPPORT_COMPRESSION=false
+    case $TARGET in
+        ar758x)
+            WITH_DM_VERITY=true
+            ;;
+        wp76xx | wp77xx)
+            pid[0]='Y921'
+            ;;
+        *)
+            echo "Unknown product '$TARGET'"
+            exit 1
+            ;;
+    esac
+
+    local img_suffix=$img_type
+    for i in "${img_indexes[@]}"; do
+        if [[ "$img_type" == "ubi" ]]; then
+            if [ ${#page_size[@]} -gt 1 ]; then
+                img_suffix="${ubi_img_type}.$(( ${page_size[$i]} / 1024 ))k.${img_type}"
+            else
+                img_suffix="${ubi_img_type}.${img_type}"
+            fi
+        fi
+
+        CreateImgFs $img_type $img_suffix $ubi_img_type ${page_size[$i]} ${oob_size[$i]} ${peb_size[$i]}
+        GenerateCwe $LEGATO_IMG $img_suffix ${pid[$i]}
+
+        # For wp76xx, the default is the 4k page image at index 0. For all other targets, the last
+        # image is the default.
+        if [[ "$TARGET" == "wp76xx" ]] || [[ "$TARGET" == "wp77xx" ]]; then
+            if [[ $i -eq 0 ]]; then
+                export IMG_SUFFIX=$img_suffix
+            fi
+        else
+            export IMG_SUFFIX=$img_suffix
+        fi
+
+    done
+}
+
+CreateImg_mdm9x40() {
+    local img_type=${1:-ubi}
+    local ubi_img_type=${2:-squashfs}
+
+    local page_size=4096
+    local pid='9X40'
+    local oob_size=224
+    local peb_size=256KiB
+    COMPAT_BYTE=00000001
+    PLATFORM='9X40'
+    SUPPORT_COMPRESSION=false
+    WITH_DM_VERITY=true
+
+    local img_suffix=$img_type
+    if [[ "$img_type" == "ubi" ]]; then
+        img_suffix="${ubi_img_type}.${img_type}"
+    fi
+
+    CreateImgFs $img_type $img_suffix $ubi_img_type $page_size $oob_size $peb_size
+    GenerateCwe $LEGATO_IMG $img_suffix $pid
+}
+
+DefaultImg() {
+    local img_suffix=${1:-yaffs2}
+
+    cd $OUTPUT_DIR
+
+    ln -sf legato${LEGATO_IMG_SUFFIX}.${img_suffix} legato${LEGATO_IMG_SUFFIX}.default
+
+    if [ -e "legato${LEGATO_IMG_SUFFIX}-${img_suffix}.cwe" ]; then
+        ln -sf legato${LEGATO_IMG_SUFFIX}-${img_suffix}.cwe legato${LEGATO_IMG_SUFFIX}.cwe
+    fi
+
+    if [ -e "$OUTPUT_DIR/legatoz${LEGATO_IMG_SUFFIX}-${img_suffix}.cwe" ]; then
+        ln -sf legatoz${LEGATO_IMG_SUFFIX}-${img_suffix}${LEGATO_IMG_SUFFIX}.cwe legatoz${LEGATO_IMG_SUFFIX}.cwe
+    fi
+}
+
+StripExeAndLibs
+
+case $TARGET in
+    ar7 | ar86)
+        CreateImg_mdm9x15 yaffs2
+        DefaultImg yaffs2
+        ;;
+    wp750x | wp85)
+        CreateImg_mdm9x15 ubi squashfs
+        DefaultImg "squashfs.ubi"
+        ;;
+    ar758x | wp76xx | wp77xx)
+        CreateImg_mdm9x28 ubi squashfs
+        DefaultImg $IMG_SUFFIX
+        ;;
+    ar759x)
+        CreateImg_mdm9x40 ubi squashfs
+        DefaultImg "squashfs.ubi"
+        ;;
+    raspi)
+        CreateImgFs squashfs
+        DefaultImg "squashfs"
+        ;;
+    virt*)
+        CreateImgFs squashfs
+        DefaultImg "squashfs"
+        ;;
+    ?)
+        echo "$0: nothing to do for target $TARGET"
+        ;;
+esac
+
+exit 0
+

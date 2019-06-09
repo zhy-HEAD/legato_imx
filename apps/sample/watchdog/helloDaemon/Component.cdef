@@ -1,0 +1,28 @@
+/*
+ * Watchdog monitored process sample.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+
+requires:
+{
+    api:
+    {
+        le_wdog.api
+    }
+
+    component:
+    {
+        ${LEGATO_ROOT}/components/watchdogChain
+    }
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/watchdogChain
+}
+
+sources:
+{
+    daemon.c
+}

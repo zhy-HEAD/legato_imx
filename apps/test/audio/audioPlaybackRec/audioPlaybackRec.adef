@@ -1,0 +1,37 @@
+executables:
+{
+    audioPlaybackRecTest = ( audioPlaybackRecComp )
+}
+
+maxFileSystemBytes: 5000K
+
+bundles:
+{
+    file:
+    {
+        [r]     audio/0-to-9.wav   /usr/share/sounds/
+        [r]     audio/male.wav     /usr/share/sounds/
+        [r]     audio/0-to-9.amr   /usr/share/sounds/
+        [r]     audio/0-to-9.awb   /usr/share/sounds/
+        [rw]    record/remote.wav  /record/
+        [rw]    record/samples.pcm /record/
+    }
+}
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LEVEL = DEBUG
+    }
+
+    maxFileBytes: 5000K
+}
+
+start: manual
+
+bindings:
+{
+    audioPlaybackRecTest.audioPlaybackRecComp.le_audio -> audioService.le_audio
+}
+

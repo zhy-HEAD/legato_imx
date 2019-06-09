@@ -1,0 +1,24 @@
+start: manual
+
+maxMQueueBytes: 100000000
+maxThreads: 100000000
+maxQueuedSignals: 100000000
+maxFileSystemBytes: 100000000
+
+executables:
+{
+    largeValuesTest = ( limitsTest )
+}
+
+processes:
+{
+    maxFileBytes: 100000000
+    maxFileDescriptors: 100000000  // This should max out at 1024.
+    maxLockedMemoryBytes: 100000000
+    maxCoreDumpFileBytes: 100000000
+
+    run:
+    {
+        (largeValuesTest 100000000 100000000 100000000 100000000 1024 100000000 100000000 100000000)
+    }
+}

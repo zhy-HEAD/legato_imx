@@ -1,0 +1,14 @@
+/*
+ * Legato target configuration.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ *
+ * This file should be included by any .sdef which uses Legato platform services.
+ */
+
+#include "${LEGATO_ROOT}/platformBuildVars.sinc"
+#if "${LEGATO_TARGET_SINC}" = ""
+  #include "${LEGATO_ROOT}/targets/${LEGATO_TARGET}.sinc"
+#else
+  #include "${LEGATO_TARGET_SINC}"
+#endif

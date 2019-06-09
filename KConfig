@@ -1,0 +1,9 @@
+#
+# Top level configuration for Legato.
+#
+# Copyright (C) Sierra Wireless Inc.
+#
+
+mainmenu "Legato Configuration"
+
+rsource "legato.kconfig"

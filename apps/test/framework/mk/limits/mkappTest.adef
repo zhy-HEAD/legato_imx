@@ -1,0 +1,54 @@
+start: manual
+
+maxThreads: 20
+
+maxMQueueBytes: 5000
+
+maxQueuedSignals: 10
+
+maxFileSystemBytes: 1001K
+
+maxMemoryBytes: 2000K
+
+executables:
+{
+    foo = ( foo )
+}
+
+processes:
+{
+    run:{ p1 = (foo) }
+
+    priority: low
+
+    maxCoreDumpFileBytes: 100000
+
+    maxFileBytes: 1K maxLockedMemoryBytes: 27K
+
+    maxFileDescriptors: /**/23
+
+    faultAction: ignore
+}
+
+maxMemoryBytes: 2004K
+
+processes:
+{
+    envVars:
+    {
+        LD_LIBRARY_PATH=/lib
+        PATH=/bin
+    }
+
+    priority: rt1
+    faultAction: restart
+
+    run: { p2 = (foo)}
+
+    maxCoreDumpFileBytes: 0
+    maxFileBytes: 1000 maxLockedMemoryBytes: 1024K
+
+    run: {p3 = (foo) }
+
+    maxFileDescriptors: 32
+}

@@ -1,0 +1,13 @@
+sources:
+{
+    le_mrcTest.c
+}
+
+requires:
+{
+    api:
+    {
+        le_mrc.api
+        le_sim.api
+    }
+}

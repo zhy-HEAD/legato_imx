@@ -1,0 +1,33 @@
+sandboxed: false
+
+executables:
+{
+    audioDaemon = ( $LEGATO_ROOT/components/audio )
+}
+
+processes:
+{
+    run:
+    {
+        (audioDaemon)
+    }
+    maxFileBytes: 5000K
+    faultAction: restart
+    #if ${LE_CONFIG_SERVICES_WATCHDOG} = y
+        maxWatchdogTimeout: 120000
+    #else
+        watchdogTimeout: never
+    #endif
+    priority: rt3
+}
+
+extern:
+{
+    audioDaemon.audio.le_audio
+}
+
+bindings:
+{
+    audioDaemon.audio.le_pm -> powerMgr.le_pm
+    audioDaemon.watchdogChain.le_wdog -> <root>.le_wdog
+}

@@ -1,0 +1,554 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_mcc Modem Call Control
+ *
+ * @ref le_mcc_interface.h "API Reference"
+ *
+ * <HR>
+ *
+ * The Modem Call Control (mcc) API functions of this API are provided by the @b modemService
+ * service.
+ *
+ * @section le_mcc_binding IPC interfaces binding
+ *
+ * Here's a code sample binding to modem services:
+ * @verbatim
+   bindings:
+   {
+      clientExe.clientComponent.le_mcc -> modemService.le_mcc
+   }
+   @endverbatim
+ *
+ * @section le_mcc_starting_a_call Starting a Call
+ *
+ * To initiate a call, create a new call object with a destination telephone
+ * number calling the le_mcc_Create() function.
+ *
+ * le_mcc_Start() must still initiate the call when ready.
+ *
+ * The le_mcc_Start() function initiates a call attempt (it's asynchronous because it can take
+ * time for a call to connect). If function failed, the le_mcc_GetTerminationReason() API can be
+ * used to retrieve the terminal reason.
+ *
+ * It's essential to register a handler function to get the call events. Use
+ * le_mcc_AddCallEventHandler() API to install that handler function. The handler will be
+ * called for all calls' events (incoming and outgoing).
+ *
+ * The le_mcc_RemoveCallEventHandler() API uninstalls the handler function.
+ *
+ * The following APIs can be used to manage incoming or outgoing calls:
+ * - le_mcc_GetTerminationReason() - termination reason.
+ * - le_mcc_GetPlatformSpecificTerminationCode() - let you get the platform specific
+ *   termination code by retrieving the termination code from @c le_mcc_CallRef_t.
+ * Please refer to @ref platformConstraintsSpecificErrorCodes for platform specific
+ * termination code description.
+ *
+ * - le_mcc_IsConnected() - connection status.
+ * - le_mcc_GetRemoteTel() - displays remote party telephone number associated with the call.
+ * - le_mcc_HangUp() will disconnect this call.
+ *
+ * When finished with the call object, call le_mcc_Delete() to free all the allocated resources
+ * associated with the object.
+ *
+ * Multi-threading/multi-application behaviour: the callRef is linked to a specific client
+ * (i.e. connection with the mcc service). Each client will have its own callRef for a same call.
+ * That is, if a call event handler is registered by one thread but le_mcc_Create() is called by
+ * another thread, they will each get different call references for the same call. So, when multiple
+ * threads are being used to work with the same call, a comparison of the call references themselves
+ * can't be used to tell whether or not they refer to the same call.
+ *
+ * The Adaptive Multi Rate (AMR) is an audio compression format optimized for speech coding and used
+ * during a voice call. Two AMRs are supported:
+ * An AMR Narrowband that encodes a bandwidth of 200–3400 Hz signals at variable bitrates ranging
+ * from 4.75 to 12.2 kbit/s and an AMR Wideband that encodes a wider bandwidth of 50–7000 Hz and
+ * thus improves the speech quality.
+ *
+ * le_mcc_SetAmrWbCapability() function enables or disables the AMR Wideband supported capability.
+ * le_mcc_GetAmrWbCapability() function returns the AMR Wideband capability status.
+ *
+ * @section le_mcc_answering_a_call Answering a call
+ *
+ * Receiving calls is similar sending calls. Add a handler through le_mcc_AddCallEventHandler()
+ * to be notified of incoming calls.
+ *
+ * To answer, call le_mcc_Answer(). To reject it, call le_mcc_HangUp().
+ *
+ *
+ * @section le_mcc_ending_all_call Ending all calls
+ *
+ * A special function can be used to hang-up all the ongoing calls: le_mcc_HangUpAll().
+ * This function can be used to hang-up any calls that have been initiated through another client
+ * like AT commands.
+ *
+ *
+ *
+ * @section le_mcc_ss Supplementary service
+ *
+ * Calling Line Identification Restriction (CLIR) can be activated or deactivated by
+ * le_mcc_SetCallerIdRestrict() API. The status is independent for each call object reference.
+ * Status can be read with the le_mcc_GetCallerIdRestrict() API. If the status is not set,
+ * le_mcc_GetCallerIdRestrict() API returns LE_UNAVAILABLE.
+ * By default the CLIR status is not set.
+ *
+ * Call waiting supplementary service can be activated or deactivated by
+ * le_mcc_SetCallWaitingService(). Its status can be given by le_mcc_GetCallWaitingService().
+ * A call waiting can be answered using le_mcc_ActivateCall() API. This API is also used to
+ * activate an on hold call (current call is then placed on hold).
+ * An activated, waiting or on hold call can be released using le_mcc_HangUp() function.
+ * See 3GPP TS 02.83 / 22.083 for any details concerning call waiting / call hold supplementary
+ * services.
+ *
+ * @todo Other Supplementary services will be available in a future release. Create simpler examples.
+ *
+ *  @section le_mcc_samples Sample codes
+ *
+ * A sample code that implements a dialing call can be found in \b le_mccTest.c file (please refer
+ * to @ref c_mccTest page).
+ *
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_mcc_interface.h
+ *
+ * Legato @ref c_mcc include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+/**
+ * @page c_mccTest Sample code of Modem Call control
+ *
+ * @include "apps/test/modemServices/mcc/mccIntegrationTest/mccTest/le_mccTest.c"
+ */
+
+USETYPES le_mdmDefs.api;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  Enumeration of the possible events that may be reported to a call event handler.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM Event
+{
+    EVENT_SETUP,       ///< Call is being set up.
+    EVENT_INCOMING,    ///< Incoming call attempt (new call).
+    EVENT_ORIGINATING, ///< Outgoing call attempt.
+    EVENT_ALERTING,    ///< Far end is now alerting its user (outgoing call).
+    EVENT_CONNECTED,   ///< Call has been established, and is media is active.
+    EVENT_TERMINATED,  ///< Call has terminated.
+    EVENT_WAITING,     ///< Call is waiting
+    EVENT_ON_HOLD,     ///< Remote party has put the call on hold.
+    EVENT_MAX          ///< Enumerate max value.
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  Enumeration of the possible reasons for call termination.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM TerminationReason
+{
+    TERM_LOCAL_ENDED,              ///< Local party ended the call (Normal Call Clearing).
+    TERM_REMOTE_ENDED,             ///< Remote party ended the call (Normal Call Clearing).
+    TERM_NETWORK_FAIL,             ///< Network could not complete the call.
+    TERM_UNASSIGNED_NUMBER,                                 ///< cf. 3GPP 24.008 Annex H
+    TERM_NO_ROUTE_TO_DESTINATION,                           ///< cf. 3GPP 24.008 Annex H
+    TERM_CHANNEL_UNACCEPTABLE,                              ///< cf. 3GPP 24.008 Annex H
+    TERM_OPERATOR_DETERMINED_BARRING,                       ///< cf. 3GPP 24.008 Annex H
+    TERM_USER_BUSY,                                         ///< cf. 3GPP 24.008 Annex H
+    TERM_NO_USER_RESPONDING,                                ///< cf. 3GPP 24.008 Annex H
+    TERM_USER_ALERTING_NO_ANSWER,                           ///< cf. 3GPP 24.008 Annex H
+    TERM_CALL_REJECTED,                                     ///< cf. 3GPP 24.008 Annex H
+    TERM_NUMBER_CHANGED,                                    ///< cf. 3GPP 24.008 Annex H
+    TERM_PREEMPTION,                                        ///< cf. 3GPP 24.008 Annex H
+    TERM_DESTINATION_OUT_OF_ORDER,                          ///< cf. 3GPP 24.008 Annex H
+    TERM_INVALID_NUMBER_FORMAT,                             ///< cf. 3GPP 24.008 Annex H
+    TERM_FACILITY_REJECTED,                                 ///< cf. 3GPP 24.008 Annex H
+    TERM_RESP_TO_STATUS_ENQUIRY,                            ///< cf. 3GPP 24.008 Annex H
+    TERM_NORMAL_UNSPECIFIED,                                ///< cf. 3GPP 24.008 Annex H
+    TERM_NO_CIRCUIT_OR_CHANNEL_AVAILABLE,                   ///< cf. 3GPP 24.008 Annex H
+    TERM_NETWORK_OUT_OF_ORDER,                              ///< cf. 3GPP 24.008 Annex H
+    TERM_TEMPORARY_FAILURE,                                 ///< cf. 3GPP 24.008 Annex H
+    TERM_SWITCHING_EQUIPMENT_CONGESTION,                    ///< cf. 3GPP 24.008 Annex H
+    TERM_ACCESS_INFORMATION_DISCARDED,                      ///< cf. 3GPP 24.008 Annex H
+    TERM_REQUESTED_CIRCUIT_OR_CHANNEL_NOT_AVAILABLE,        ///< cf. 3GPP 24.008 Annex H
+    TERM_RESOURCES_UNAVAILABLE_OR_UNSPECIFIED,              ///< cf. 3GPP 24.008 Annex H
+    TERM_QOS_UNAVAILABLE,                                   ///< cf. 3GPP 24.008 Annex H
+    TERM_REQUESTED_FACILITY_NOT_SUBSCRIBED,                 ///< cf. 3GPP 24.008 Annex H
+    TERM_INCOMING_CALLS_BARRED_WITHIN_CUG,                  ///< cf. 3GPP 24.008 Annex H
+    TERM_BEARER_CAPABILITY_NOT_AUTH,                        ///< cf. 3GPP 24.008 Annex H
+    TERM_BEARER_CAPABILITY_UNAVAILABLE,                     ///< cf. 3GPP 24.008 Annex H
+    TERM_SERVICE_OPTION_NOT_AVAILABLE,                      ///< cf. 3GPP 24.008 Annex H
+    TERM_ACM_LIMIT_EXCEEDED,                                ///< cf. 3GPP 24.008 Annex H
+    TERM_BEARER_SERVICE_NOT_IMPLEMENTED,                    ///< cf. 3GPP 24.008 Annex H
+    TERM_REQUESTED_FACILITY_NOT_IMPLEMENTED,                ///< cf. 3GPP 24.008 Annex H
+    TERM_ONLY_DIGITAL_INFORMATION_BEARER_AVAILABLE,         ///< cf. 3GPP 24.008 Annex H
+    TERM_SERVICE_OR_OPTION_NOT_IMPLEMENTED,                 ///< cf. 3GPP 24.008 Annex H
+    TERM_INVALID_TRANSACTION_IDENTIFIER,                    ///< cf. 3GPP 24.008 Annex H
+    TERM_USER_NOT_MEMBER_OF_CUG,                            ///< cf. 3GPP 24.008 Annex H
+    TERM_INCOMPATIBLE_DESTINATION,                          ///< cf. 3GPP 24.008 Annex H
+    TERM_INVALID_TRANSIT_NW_SELECTION,                      ///< cf. 3GPP 24.008 Annex H
+    TERM_SEMANTICALLY_INCORRECT_MESSAGE,                    ///< cf. 3GPP 24.008 Annex H
+    TERM_INVALID_MANDATORY_INFORMATION,                     ///< cf. 3GPP 24.008 Annex H
+    TERM_MESSAGE_TYPE_NON_IMPLEMENTED,                      ///< cf. 3GPP 24.008 Annex H
+    TERM_MESSAGE_TYPE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE,   ///< cf. 3GPP 24.008 Annex H
+    TERM_INFORMATION_ELEMENT_NON_EXISTENT,                  ///< cf. 3GPP 24.008 Annex H
+    TERM_CONDITONAL_IE_ERROR,                               ///< cf. 3GPP 24.008 Annex H
+    TERM_MESSAGE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE,        ///< cf. 3GPP 24.008 Annex H
+    TERM_RECOVERY_ON_TIMER_EXPIRY,                          ///< cf. 3GPP 24.008 Annex H
+    TERM_PROTOCOL_ERROR_UNSPECIFIED,                        ///< cf. 3GPP 24.008 Annex H
+    TERM_INTERWORKING_UNSPECIFIED,                          ///< cf. 3GPP 24.008 Annex H
+    TERM_SERVICE_TEMPORARILY_OUT_OF_ORDER,                  ///< cf. 3GPP 24.008 10.5.3.6
+    TERM_NOT_ALLOWED,                                       ///< Call operations not allowed
+                                                            ///<  (i.e. Radio off).
+    TERM_FDN_ACTIVE,                                        ///< FDN is active and number is not
+                                                            ///< in the FDN.
+    TERM_NO_SERVICE,                                        ///< No service or bad signal quality
+    TERM_PLATFORM_SPECIFIC,                                 ///< Platform specific code.
+    TERM_UNDEFINED                                          ///< Undefined reason.
+};
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  Reference type for managing active calls.
+ */
+//--------------------------------------------------------------------------------------------------
+REFERENCE Call;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Create a call reference.
+ *
+ * @note Return NULL if call reference can't be created
+ *
+ * @note If destination number is too long (max LE_MDMDEFS_PHONE_NUM_MAX_LEN digits),
+ * it is a fatal error, the function will not return.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION Call Create
+(
+    string   phoneNumPtr[le_mdmDefs.PHONE_NUM_MAX_LEN]   IN ///< The target number we are going to
+                                                            ///< call.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Call to free up a call reference.
+ *
+ * @return
+ *     - LE_OK        The function succeed.
+ *     - LE_NOT_FOUND The call reference was not found.
+ *     - LE_FAULT      The function failed.
+ *
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t Delete
+(
+    Call callRef IN  ///< The call object to free.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Start a call attempt.
+ *
+ * Asynchronous due to possible time to connect.
+ *
+ * As the call attempt proceeds, the profile's registered call event handler receives events.
+ *
+ * @return
+ *      - LE_OK            Function succeed.
+ *      - LE_BUSY          The call is already in progress
+ *
+ * * @note As this is an asynchronous call, a successful only confirms a call has been
+ *       started. Don't assume a call has been successful yet.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t Start
+(
+    Call callRef IN  ///< Reference to the call object.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Allow the caller to know if the given call is actually connected or not.
+ *
+ * @return TRUE if the call is connected, FALSE otherwise.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION bool IsConnected
+(
+    Call callRef IN ///< The call reference to read.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Read out the remote party telephone number associated with the call.
+ *
+ * Output parameter is updated with the telephone number. If the Telephone number string length exceeds
+ * the value of 'len' parameter, the LE_OVERFLOW error code is returned and 'telPtr' is used until
+ * 'len-1' characters and a null-character is implicitly appended at the end of 'telPtr'.
+ * Note that 'len' sould be at least equal to LE_MDMDEFS_PHONE_NUM_MAX_BYTES, otherwise LE_OVERFLOW
+ * error code will be common.
+ *
+ * @return LE_OVERFLOW      The Telephone number length exceed the maximum length.
+ * @return LE_OK            The function succeeded.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetRemoteTel
+(
+    Call     callRef IN,                                 ///<  The call reference to read from.
+    string  telPtr[le_mdmDefs.PHONE_NUM_MAX_LEN] OUT    ///< The telephone number string.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Called to get the termination reason.
+ *
+ * @return The termination reason.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION TerminationReason GetTerminationReason
+(
+    Call callRef IN ///< The call reference to read from.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Called to get the platform specific termination code.
+ *
+ * Refer to @ref platformConstraintsSpecificErrorCodes for platform specific
+ * termination code description.
+ *
+ * @return The platform specific termination code.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION int32 GetPlatformSpecificTerminationCode
+(
+    Call callRef IN ///< The call reference to read from.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  Answers incoming call.
+ *
+ * @return LE_TIMEOUT       No response was received from the Modem.
+ * @return LE_OK            The function succeeded.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ * @note A call waiting call must be answered using SetCallActive() API. This API doesn't manage
+ * call waiting supplementary service.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t Answer
+(
+    Call callRef IN ///< The call reference.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Disconnect, or hang up, the specifed call. Any active call handlers
+ * will be notified.
+ *
+ * @return LE_FAULT         The function failed.
+ * @return LE_TIMEOUT       No response was received from the Modem.
+ * @return LE_OK            Function succeeded.
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ * @note this API can also be used to disconnect a waiting or on hold call.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t HangUp
+(
+    Call callRef IN ///< The call to end.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function will disconnect, or hang up all the ongoing calls. Any active call handlers will
+ * be notified.
+ *
+ * @return LE_FAULT         The function failed.
+ * @return LE_TIMEOUT       No response was received from the Modem.
+ * @return LE_OK            The function succeeded.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t HangUpAll
+(
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function return the Calling Line Identification Restriction (CLIR) status on the specific
+ *  call.
+ *
+ * The output parameter is updated with the CLIR status.
+ *    - LE_ON  Disable presentation of own phone number to remote.
+ *    - LE_OFF Enable presentation of own phone number to remote.
+ *
+ * @return
+ *    - LE_OK          The function succeed.
+ *    - LE_NOT_FOUND   The call reference was not found.
+ *    - LE_UNAVAILABLE CLIR status was not set.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetCallerIdRestrict
+(
+    Call callRef IN, ///< The call reference.
+    le_onoff_t clirStatusPtr OUT        ///< the Calling Line Identification Restriction (CLIR) status
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function set the Calling Line Identification Restriction (CLIR) status on the specific call.
+ * By default the CLIR status is not set.
+ *
+ * @return
+ *     - LE_OK        The function succeed.
+ *     - LE_NOT_FOUND The call reference was not found.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetCallerIdRestrict
+(
+    Call callRef IN, ///< The call reference.
+    le_onoff_t clirStatus IN         ///< The Calling Line Identification Restriction (CLIR) status.
+);
+
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Handler for call state changes.
+ *
+ * @note The callRef has to be deleted using le_mcc_Delete() when LE_MCC_TERMINATED event
+ * is received, except if is has to be used for a future usage (with le_mcc_profile handler for
+ * instance, or dialing again the same number).
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+HANDLER CallEventHandler
+(
+    Call callRef IN, ///< The call reference.
+    Event  event    ///< Call event.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register an event handler that will be notified when an call's event occurs.
+ *
+ * @return A reference to the new event handler object.
+ *
+ * @note It is a fatal error if this function does succeed.  If this function fails, it will not
+ *       return.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+EVENT CallEvent
+(
+    CallEventHandler handler
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function activates or deactivates the call waiting service.
+ *
+ * @return
+ *     - LE_OK        The function succeed.
+ *     - LE_FAULT     The function failed.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetCallWaitingService
+(
+    bool active IN         ///< The call waiting activation.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function gets the call waiting service status.
+ *
+ * @return
+ *     - LE_OK        The function succeed.
+ *     - LE_FAULT     The function failed.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetCallWaitingService
+(
+    bool active OUT         ///< The call waiting activation.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function activates the specified call. Other calls are placed on hold.
+ *
+ * @return
+ *     - LE_OK        The function succeed.
+ *     - LE_FAULT     The function failed.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t ActivateCall
+(
+    Call callRef IN                 ///< The call reference.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function enables/disables the audio AMR Wideband capability.
+ *
+ * @return
+ *     -  LE_OK             The function succeeded.
+ *     -  LE_UNAVAILABLE    The service is not available.
+ *     -  LE_FAULT          On any other failure.
+ *
+ * @note The capability setting takes effect immediately and is not persistent to reset.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetAmrWbCapability
+(
+    bool enable IN   ///< True enables the AMR Wideband capability, false disables it.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * This function gets the audio AMR Wideband capability.
+ *
+ * @return
+ *     - LE_OK            The function succeeded.
+ *     - LE_UNAVAILABLE   The service is not available.
+ *     - LE_FAULT         On any other failure.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetAmrWbCapability
+(
+    bool enabled OUT  ///< True if AMR Wideband capability is enabled, false otherwise.
+);

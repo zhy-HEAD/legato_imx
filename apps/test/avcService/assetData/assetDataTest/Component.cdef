@@ -1,0 +1,23 @@
+requires:
+{
+    api:
+    {
+        airVantage/le_avc.api [types-only]
+        le_cfg.api
+    }
+    component:
+    {
+        $LEGATO_ROOT/components/airVantage/platformAdaptor/default/le_pa_avc_default
+    }
+}
+
+sources:
+{
+    $LEGATO_ROOT/components/airVantage/avcDaemon/assetData.c
+    assetDataTest.c
+}
+
+ldflags:
+{
+    ${LDFLAG_LEGATO_TIMESERIES}
+}

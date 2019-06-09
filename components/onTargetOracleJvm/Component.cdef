@@ -1,0 +1,14 @@
+
+requires:
+{
+    dir:
+    {
+        "${LE_CONFIG_EJDK_DIR}/bin" "/"
+        "${LE_CONFIG_EJDK_DIR}/lib" "/"
+    }
+
+    component:
+    {
+        jvmShared
+    }
+}

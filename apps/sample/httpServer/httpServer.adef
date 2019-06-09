@@ -1,0 +1,89 @@
+sandboxed: true
+
+bundles:
+{
+    dir:
+    {
+        pages /pages
+        cfg /cfg
+    }
+}
+
+requires:
+{
+    file:
+    {
+        /lib/libutil.so.1 /lib/libutil.so.1
+        /etc/nsswitch.conf /etc/nsswitch.conf
+        /lib/libnss_compat.so.2 /lib/libnss_compat.so.2
+        /lib/libnsl.so.1 /lib/libnsl.so.1
+        /etc/passwd /etc/passwd    // needed by python to lookup user
+        /legato/systems/current/version /legato/systems/current/version
+        /legato/systems/current/status /legato/systems/current/status
+        /legato/systems/current/apps/httpServer/read-only/bin/lighttpd /app/bin/lighttpd
+    }
+
+    dir:
+    {
+        /proc /    // needed by `app` script, and for listing running processes
+        /bin /
+        /sbin /
+        /usr/lib /usr/
+        /usr/bin /usr/
+        /usr/include /usr/
+        /legato/systems/current/bin /legato/systems/current/
+        /legato/systems/current/lib /legato/systems/current/
+        /legato/systems/current/apps /legato/systems/current/
+    }
+
+    device:
+    {
+        [rw] /dev/null /dev/null
+        [r] /dev/urandom /dev/urandom
+        [r] /dev/random /dev/random
+    }
+
+    configTree:
+    {
+        [r] system
+    }
+}
+
+extern:
+{
+    requires:
+    {
+        le_cfg = $LEGATO_ROOT/interfaces/le_cfg.api
+        le_update = $LEGATO_ROOT/interfaces/le_update.api
+        le_appInfo = $LEGATO_ROOT/interfaces/le_appInfo.api
+    }
+
+}
+
+bindings:
+{
+    *.le_cfg -> <root>.le_cfg
+    *.le_update -> <root>.le_update
+    *.le_appInfo -> <root>.le_appInfo
+}
+
+start: auto
+processes:
+{
+    envVars:
+    {
+        HOME="/"
+    }
+
+    run:
+    {
+        ( /app/bin/lighttpd -m /modlibs/ -D -f /cfg/lighttpd.conf )
+    }
+}
+
+components:
+{
+    ${LEGATO_ROOT}/components/3rdParty/openssl
+    ${LEGATO_ROOT}/components/3rdParty/lighttpd
+    sslCertComponent
+}

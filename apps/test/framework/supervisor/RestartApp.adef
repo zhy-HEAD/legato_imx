@@ -1,0 +1,28 @@
+start: manual
+
+executables:
+{
+    faultTest = ( faultTest )
+}
+
+processes:
+{
+    // This needs to be "processName (executable appName faultType)
+    run:
+    {
+        noExit = (faultTest RestartApp noExit)
+    }
+
+    priority: rt16
+}
+
+processes:
+{
+    faultAction: restartApp
+
+    // This needs to be "processName (executable appName faultType)
+    run:
+    {
+        restarApp = (faultTest RestartApp progFault)
+    }
+}

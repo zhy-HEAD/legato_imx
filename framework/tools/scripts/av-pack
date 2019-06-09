@@ -1,0 +1,389 @@
+#!/bin/bash
+
+TMP_DIR=.av-pack.tmp
+
+copyright="
+Copyright (C) Sierra Wireless Inc.
+"
+
+. "$(dirname "${BASH_SOURCE[0]}")/shlib"
+
+help_short_desc="Generate package for upload to AirVantage."
+
+help_usage=(
+"[OPTIONS]"
+"-h"
+"--help"
+)
+
+help_long_description=(
+"Generates a package for a legato application or system that can be uploaded to AirVantage"
+"and pushed to devices."
+""
+"Options:"
+""
+"-u, --update-file, <string>"
+"    Include an update file.  This gets pushed to the device when an \"install application\" is "
+"requested for this application."
+""
+"-b, --build-dir, <string>"
+"    File system path of the build directory to be searched for the info.properties file. Please ensure"
+"that the build directory specified corresponds to your *.update file. This will be used to"
+"determine whether av-pack should be generating an application pack or system pack. The path should"
+"end with the target platform."
+""
+"-n, --name, <string>"
+"    (Optional) Identify the name of the system."
+""
+"-t, --type, <string>"
+"    (Optional) Internal type field used by AirVantage to identify the system or application."
+""
+"-h, --help"
+"    Display this help text.  (Cannot be used with other options.)"
+)
+
+# Function to set the UPDATE_FILE variable, checking for duplicates and if file is valid
+function SetUpdateFile()
+{
+    if [ -n "$UPDATE_FILE" ]
+    then
+        ExitWithError "Only one update file permitted."
+    fi
+
+    if [ ! -f "$1" ]
+    then
+        ExitWithError "Update file does not exists."
+        exit 1
+    fi
+
+    UPDATE_FILE="$1"
+    FILE_NAME="$(basename $UPDATE_FILE)"
+}
+
+# Function to set the BUILD_DIR variable, checking for duplicates and if build directory is valid
+function SetBuildDir()
+{
+    if [ -n "$BUILD_DIR" ]
+    then
+        ExitWithError "Only one build directory permitted."
+    fi
+
+    if [ ! -d "$1" ]
+    then
+        ExitWithError "Build directory path does not exists."
+        exit 1
+    fi
+
+    BUILD_DIR="$1"
+}
+
+# Function to set the NAME variable, checking for duplicates.
+function SetName()
+{
+    if [ -n "$NAME" ]
+    then
+        ExitWithError "Only one type permitted."
+    fi
+
+    NAME="$1"
+}
+
+# Function to set the TYPE variable, checking for duplicates.
+function SetType()
+{
+    if [ -n "$TYPE" ]
+    then
+        ExitWithError "Only one type permitted."
+    fi
+
+    TYPE="$1"
+}
+
+# Function used to determine the type of package (app or system)
+function GetUpdateType()
+{
+    # a version file in the build directory is an indicator that is it a system
+    systemIdentifier=$(find $BUILD_DIR -name version)
+    if [ -z "$systemIdentifier" ]
+    then
+        echo "app"
+    else
+        echo "system"
+    fi
+}
+
+# Function used to parse the value of a field from a manifest
+function GetManifestField()
+{
+    value=$(cat "$1" | grep "$2=\"" | sed "s/^.*$2=\"//" | sed "s/\".*$//")
+    echo $value
+}
+
+# Function used to override the value of a field in a manifest
+function SetManifestField()
+{
+    sed -i "0,/$2=\"/{s/$2=\"/$2=\"$3/}" "$1"
+}
+
+# Function used to get the hash of an application
+function GetAppHash()
+{
+    value=$(cat "$1" | grep "app.md5" | cut -d '=' -f2)
+    echo $value
+}
+
+# Add application update file to manifest
+function IncludeBinaryFile()
+{
+    cp $UPDATE_FILE $1
+
+    sed -e "/<\/app:application>/d" -i "$1/manifest.app"
+(
+cat << EOF
+  <binaries>
+    <binary file="${FILE_NAME}"/>
+  </binaries>
+</app:application>
+EOF
+) >> "$1/manifest.app"
+}
+
+# Generate an manifest.app file at the specified path, based on the provided info.properties file.
+function GenerateAppManifest()
+{
+    local infoPropPath=$1
+    local manifestPath=$2
+
+    # Get app name and version from info.properties
+    local line=$(grep "app.name" $infoPropPath)
+    local appName=${line#app.name=}
+
+    if [ -z "$NAME" ]
+    then
+        local forcedName=$appName
+    else
+        local forcedName="$NAME"
+    fi
+
+    line=$(grep "app.version" $infoPropPath)
+    local appVer=${line#app.version=}
+
+    cat <<EndOfManifest > $manifestPath
+<?xml version="1.0" encoding="UTF-8"?>
+<app:application xmlns:app="http://www.sierrawireless.com/airvantage/application/1.0" name="$forcedName" type="" revision="$appVer">
+  <application-manager use="LWM2M_SW"/>
+  <capabilities>
+    <communication use="legato"/>
+    <data>
+      <encoding type="LWM2M">
+        <asset default-label="Application Objects" id="le_${appName}">
+          <node default-label="Application Object" path="0">
+            <variable default-label="Version" path="0" type="string"/>
+            <variable default-label="Name" path="1" type="string"/>
+            <variable default-label="State" path="2" type="int"/>
+            <variable default-label="StartMode" path="3" type="int"/>
+          </node>
+          <node default-label="Process Object" path="1">
+            <variable default-label="Name" path="0" type="string"/>
+            <variable default-label="ExecName" path="1" type="string"/>
+            <variable default-label="State" path="2" type="int"/>
+            <variable default-label="FaultAction" path="3" type="int"/>
+            <variable default-label="FaultCount" path="4" type="int"/>
+            <variable default-label="FaultLogs" path="5" type="string"/>
+          </node>
+        </asset>
+      </encoding>
+    </data>
+  </capabilities>
+</app:application>
+EndOfManifest
+}
+
+# Generate manifest for application(s)
+function CreateAppPack()
+{
+    if [ "$UPDATE_TYPE" == "app" ]
+    then
+        # Get the path to the info.properties for the app.
+        infoPropertiesPath=$(ls $BUILD_DIR/app/*/staging/info.properties)
+
+        if [ -z "$infoPropertiesPath" ]
+        then
+            ExitWithError "Can't find any info.properties file."
+        fi
+
+        if [ "$(echo "$infoPropertiesPath" | wc -l)" -gt 1 ]
+        then
+            ExitWithError "More than one info.proeprties file is found. Delete $BUILD_DIR and make the app again."
+        fi
+
+        # Generate the manifest.app file based on info found in info.properties.
+        manifestPath=$TMP_DIR/manifest.app
+        GenerateAppManifest $infoPropertiesPath $manifestPath
+
+        # Set type attribute in manifest
+        appName=$(GetManifestField "$manifestPath" "name")
+
+        if [ -z "$appName" ]
+        then
+            ExitWithError "Failed to extract app name from manifest file $manifestPath"
+        fi
+
+        if [ -z "$TYPE" ]
+        then
+            TYPE="$appName-legato-application"
+        fi
+
+        SetManifestField "$manifestPath" "type" "$TYPE"
+
+        # Check application version, if none, we will replace it with the applications hash
+        appVersion=$(GetManifestField "$manifestPath" "revision")
+        if [ -z "$appVersion" ]
+        then
+            SetManifestField "$manifestPath" "revision" "$(GetAppHash $infoPropertiesPath)"
+        fi
+
+        IncludeBinaryFile "$TMP_DIR/"
+    else
+        # Get the list of paths to the info.properties files for the system.
+        infoPropertiesPathList=$(ls $BUILD_DIR/system/app/*/staging/info.properties)
+
+        # Generate manifest files for each app found in the system.
+        for infoPropertiesPath in $infoPropertiesPathList
+        do
+            # Generate the manifest.app file based on info found in info.properties.
+            line=$(grep "app.name" $infoPropertiesPath)
+            appName=${line#app.name=}
+            mkdir $TMP_DIR/$appName
+            manifestPath=$TMP_DIR/$appName/manifest.app
+            GenerateAppManifest $infoPropertiesPath $manifestPath
+
+            # Set type attribute in manifest
+            SetManifestField "$manifestPath" "type" "$appName-$TYPE"
+
+            # Check application version, if none, we will replace it with the applications hash
+            appVersion=$(GetManifestField "$manifestPath" "revision")
+            if [ -z "$appVersion" ]
+            then
+                SetManifestField "$manifestPath" "revision" "$(GetAppHash $infoPropertiesPath)"
+            fi
+        done
+    fi
+}
+
+# Generate manifest for system
+function CreateSystemPack()
+{
+    # A system pack must include the update file
+    if [ -z "$UPDATE_FILE" ]
+    then
+        ExitWithError "No update file specified. Required when building an airvantage system package."
+    fi
+
+    if [ -z "$NAME" ]
+    then
+        NAME="${FILE_NAME%%.*}"
+    fi
+
+    if [ -z "$TYPE" ]
+    then
+        TYPE="${FILE_NAME%%.*}-legato-system"
+    fi
+
+    systemManifestDir="$TMP_DIR/main"
+    mkdir $systemManifestDir
+
+    systemVersion=$(find $BUILD_DIR -name version | head -n 1 | xargs cat)
+    echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" >> $systemManifestDir/manifest.app
+    echo "<app:application xmlns:app=\"http://www.sierrawireless.com/airvantage/application/1.0\" name=\"${NAME}\" type=\"${TYPE}\" revision=\"${systemVersion}\">" >> $systemManifestDir/manifest.app
+    echo "  <application-manager use=\"LWM2M_LEGATO_BUNDLE\"/>" >> $systemManifestDir/manifest.app
+    echo "</app:application>" >> $systemManifestDir/manifest.app
+
+    IncludeBinaryFile "$systemManifestDir/"
+
+    # Package all the apps from the system
+    CreateAppPack
+}
+
+# Update file
+UPDATE_FILE=""
+
+# Directory to search for the info.properties file.
+BUILD_DIR=""
+
+# The "name" the will be declared in the manifest file
+NAME=""
+
+# The "type" that will be declared in the manifest file
+TYPE=""
+
+# Parse the command line.
+while [ $# -ne 0 ]
+do
+    case "$1" in
+        -u|--update-file)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                ExitWithError "Missing update file for -u option."
+            fi
+            SetUpdateFile "$2"
+            shift 2
+            ;;
+        -n|--name)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                ExitWithError "Missing name for -n option."
+            fi
+            SetName "$2"
+            shift 2
+            ;;
+        -t|--type)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                ExitWithError "Missing type for -t option."
+            fi
+            SetType "$2"
+            shift 2
+            ;;
+        -b|--build-dir)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                ExitWithError "Missing build directory for -b option."
+            fi
+            SetBuildDir "$2"
+            shift 2
+            ;;
+        *)
+            CheckForHelp $@
+            ExitWithError "Invalid option"
+            ;;
+    esac
+done
+
+# Make sure build directory has been specified
+if [ -z "$BUILD_DIR" ]
+then
+    ExitWithError "No build directory specified."
+fi
+
+UPDATE_TYPE=$(GetUpdateType)
+
+# create temp directory
+rm -rf $TMP_DIR
+mkdir $TMP_DIR
+
+case $UPDATE_TYPE in
+    app)
+        echo "Generating an airvantage package for a legato application."
+        CreateAppPack
+        ;;
+    system)
+        echo "Generating an airvantage package for a legato system."
+        CreateSystemPack
+        ;;
+esac
+
+# building our final zip package to upload to the server
+rm -rf ${FILE_NAME%%.*}.zip
+cd $TMP_DIR && zip -r ../"${FILE_NAME%%.*}".zip * && cd ..
+rm -rf $TMP_DIR

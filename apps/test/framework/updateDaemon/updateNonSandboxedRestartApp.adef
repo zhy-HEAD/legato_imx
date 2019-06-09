@@ -1,0 +1,20 @@
+start: manual
+
+sandboxed: false
+
+executables:
+{
+    faultTest = ( faultTest )
+}
+
+processes:
+{
+    faultAction: restartApp
+
+    // This needs to be "processName (executable appName faultType)
+    run:
+    {
+        noExit = (faultTest NonSandboxedRestartApp noExit)
+        restarApp = (faultTest NonSandboxedRestartApp progFault)
+    }
+}

@@ -1,0 +1,106 @@
+/** @page aboutReleaseNotes Release Notes
+
+Version: <b>Legato 19.04.0</b><br>
+Date: <b>May 10, 2019</b><br>
+@ref aboutLicenses "Legato Application Framework Licensing Information"
+
+Visit the <a href="https://legato.io/releases">release page</a> to @b download the tarball,
+@b clone the repositories from GitHub, or view <b>previous released versions</b>.
+
+Get started with the latest version of Legato by installing the SDK through @ref confLeaf "Leaf".
+
+Search for the latest version for your target (using wp76xx as an example):
+@verbatim
+$ leaf search -t wp76xx -t latest
+@endverbatim
+
+Update your profile to the latest version:
+@verbatim
+$ leaf update
+@endverbatim
+
+@section rn1904_Features New Features
+
+List of new features in the 19.04 Release:
+
+@subsection rn1904_Features_exfeatures Experimental Features Section
+
+We are now releasing alpha and beta features as experimental features within Legato. The
+current experimental features are @ref c_le_dcs and @ref conceptsRPC. Experimental features are not
+enabled by default in Legato and must be configured with @ref kconfigDescription.
+
+To enable Experimental Features within KConfig:
+@verbatim
+make menuconfig_<target>
+
+General Setup
+  -> Prompt for experimental (alpha-quality) features
+@endverbatim
+
+@subsection rn1904_Features_dataConnection Migrate from le_data to le_dcs
+
+The le_data API (@ref c_le_data le_data.api) has been refactored to use le_dcs
+(@ref c_le_dcs le_dcs.api).
+This addresses unexpected behaviors when using both le_data and le_dcs API simultaneously.
+
+@subsection rn1904_Features_wifi New wifi configuration APIs
+
+Introduced new wifi APIs to configure access points for 802.11 n and/or ac
+(@ref c_le_wifi_ap le_wifiAp.api).
+
+@section rn1904_BFeatures Beta Features
+
+@section rn1904_AFeatures Alpha Features
+
+The following are the list of features that have been added into the 19.04 Release but are still
+being developed and should not be used on production targets. Please provide feedback for these
+features on our [forums](https://forum.legato.io/):
+
+@subsection rn1904_AFeatures_RPC Legato RPC
+
+Provide legato RPC as an experimental feature (@ref conceptsRPC Remote procedure call). Please refer
+to @ref getStartRPC Legato RPC on how to get started and also the current limitations.
+
+@subsection rn1904_AFeatures_IDE Experimental IDE
+
+The Legato team has launched the @b alpha version of a @ref tools_vsCode "Legato Plugin for VSCode".
+
+@section rn1904_Fixes Fixed Issues
+
+All changes are tagged in GitHub as "19.04.0".  The full list of changes and commit
+messages can be found on GitHub.
+
+- [Legato AF 19.04.0 Fixes](https://github.com/legatoproject/legato-af/commits/19.04.0)
+
+@note This is only the list of fixes for the Application Framework and Platform Services, for the
+list of changes in the Platform Adapters and AVC Service view the commits under the tag 19.04.0 in
+individual repositories on GitHub.
+
+@section rn1904_KnownIssues Known Issues
+
+@subsection rn1904_Constraints Constraints and Limitations
+
+@subsubsection rn1904_ConstraintsLinuxSupport Dev Machine Linux Version
+
+To develop applications within the Legato Application Framework, a current supported
+[Long Term Support version of Ubuntu Linux](https://www.ubuntu.com/info/release-end-of-life) is
+required on your dev machine (or running in a virtual box on Windows).  Ubuntu 18.04 is the current
+@b recommended version to use on your dev machine.
+
+@subsubsection rn1904_ConstECMUSB ECM-USB modem manager issue
+
+Ubuntu 15.10 and newer has Modem Manager version @c 1.4.12-1ubuntu1  installed by default which
+conflicts with the ECM-USB driver when connecting a target.  Modem manager may cause the Ubuntu
+Network Manager to crash on your host and/or your target device to become unavailable over USB.
+
+@b Symptoms:
+- NetworkManager crashing when plugging into your device over USB, or
+- The target device becomes inaccessible after 30 seconds.
+
+@b Recommended  @b Work  @b Around:
+- Uninstall @c modemmanager from Ubuntu or
+- [Downgrade @c modemmanager to version 1.0.0-2ubuntu1](http://packages.ubuntu.com/trusty/modemmanager)
+
+Copyright (C) Sierra Wireless Inc.
+
+**/

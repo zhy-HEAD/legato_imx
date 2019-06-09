@@ -1,0 +1,148 @@
+/**
+ * @page ifgentest Testing IfGen Doxygen Support
+ *
+ * @ref interface.h "API Reference"
+ *
+ * Example interface file
+ */
+
+/**
+ * @file interface.h
+ *
+ * Legato @ref ifgentest include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+
+
+USETYPES common;
+
+DEFINE TEN = common.TEN;
+DEFINE TWENTY = TEN + common.TEN;
+DEFINE SOME_STRING = "some string";
+
+
+/**
+ * BITMASK example
+ */
+BITMASK BitMaskExample
+{
+    A,      ///< first
+    B=0x8,  ///< second
+    C       ///< third
+};
+
+
+/**
+ * Handler definition
+ */
+HANDLER TestAHandler
+(
+    int32 x   ///< First parameter for the handler
+              ///<      Second comment line is indented 5 extra spaces
+              ///<Third comment line is missing initial space
+);
+
+
+/**
+ * This event is used for testing EVENTS and Add/Remove handler functions
+ */
+EVENT TestA
+(
+    TestAHandler myHandler
+);
+
+
+/**
+ * Function takes all the possible kinds of parameters, but returns nothing
+ */
+FUNCTION allParameters
+(
+    common.EnumExample a,  ///< first one-line comment
+                           ///< second one-line comment
+    uint32 b OUT,
+    uint32 data[common.TEN] IN,
+
+    uint32 output[TEN] OUT,   ///< some more comments here
+    ///< and some comments here as well
+
+    string label [20] IN,
+    string response [TWENTY] OUT,
+    ///< comments on final parameter, first line
+    ///< and more comments
+
+    string more [TWENTY] OUT   ///< This parameter tests a bug fix
+);
+
+
+/**
+ * Test file descriptors as IN and OUT parameters
+ */
+FUNCTION FileTest
+(
+    file dataFile IN,   ///< file descriptor as IN parameter
+    file dataOut OUT    ///< file descriptor as OUT parameter
+);
+
+
+/**
+ * This function fakes an event, so that the handler will be called.
+ * Only needed for testing.  Would never exist on a real system.
+ */
+FUNCTION TriggerTestA
+(
+);
+
+/**
+ * Handler definition for testing bugs
+ */
+HANDLER BugTestHandler
+(
+);
+
+
+/**
+ * This event
+ *is used for
+ *     testing
+ * a specific bug, as well as event comment strings.
+ *
+ * Uses old-style handler, for backwards compatibility testing
+ */
+EVENT BugTest
+(
+    string newPathPtr[512] IN,
+    handler BugTestHandler
+);
+
+
+/**
+ * Define handler for callback testing
+ */
+HANDLER CallbackTestHandler
+(
+    uint32 data IN,
+    string name[50] IN,
+    uint8 array[16] IN,
+    file dataFile IN
+);
+
+/**
+ * Test function callback parameters
+ */
+FUNCTION int32 TestCallback
+(
+    uint32 someParm IN,
+    uint8  dataArray[5] IN,
+    CallbackTestHandler handler
+);
+
+/**
+ * Function to fake an event for the callback function testing
+ */
+FUNCTION TriggerCallbackTest
+(
+    uint32 data IN
+);
+
+

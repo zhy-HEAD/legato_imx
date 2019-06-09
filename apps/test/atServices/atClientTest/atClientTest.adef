@@ -1,0 +1,27 @@
+executables:
+{
+    atClientTest = ( atClientTestComp )
+}
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LEVEL = DEBUG
+    }
+}
+
+requires:
+{
+    device:
+    {
+        [rw]    /dev/ttyAT    /dev/ttyAT
+    }
+}
+
+start: manual
+
+bindings:
+{
+    atClientTest.atClientTestComp.le_atClient -> atService.le_atClient
+}

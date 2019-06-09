@@ -1,0 +1,37 @@
+provides:
+{
+    api:
+    {
+        atServices/le_atServer.api
+    }
+}
+
+requires:
+{
+    api:
+    {
+        atServices/le_atClient.api
+    }
+
+    component:
+    {
+        ${LEGATO_ROOT}/components/watchdogChain
+    }
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/watchdogChain
+}
+
+sources:
+{
+    le_atServer.c
+    bridge.c
+    $CURDIR/../Common/le_dev.c
+}
+
+cflags:
+{
+    -I$CURDIR/../Common
+}

@@ -1,0 +1,345 @@
+# --------------------------------------------------------------------------------------------------
+# Makefile used to build the Legato application framework.
+#
+# This Makefile is intended to run as part of a larger build system.  The following variables
+# must be set by that system:
+#
+# - TARGET = e.g., localhost, ar7, wp85, raspi, etc.
+# - CC = path to the appropriate C compiler for the target.
+# - STRIP = path to the appropriate debug symbol stripper for the target.
+# - READELF = path to the appropriate ELF file info extractor for the target.
+# - OBJCOPY = path to the appropriate object file copier/translator utility for the target.
+#
+# Other variables that can be set:
+#
+# - LEGATO_ROOT = directory under which the Legato AF sources can be found. Defaults to $(CURDIR).
+# - BUILD_DIR = directory under which the build artifacts and outputs should be placed.
+#               Defaults to $(LEGATO_ROOT)/build/$(TARGET).
+# - LEGATO_SYSROOT = directory in which the build tool chain's system files can be found.
+#
+# Copyright (C) Sierra Wireless Inc.
+# --------------------------------------------------------------------------------------------------
+
+include utils.mk
+
+# Make sure required variables are set.
+ifndef CC
+  $(error CC is not set)
+endif
+ifndef STRIP
+  $(error STRIP is not set)
+endif
+ifndef OBJCOPY
+  $(error OBJCOPY is not set)
+endif
+ifndef READELF
+  $(error READELF is not set)
+endif
+ifndef TARGET
+  $(error TARGET is not set)
+endif
+
+# Determine various direcory paths
+export LEGATO_ROOT ?= $(CURDIR)
+export LEGATO_TARGET ?= $(TARGET)
+
+ifneq ($(LEGATO_SYSROOT),)
+  export TARGET_CC_SYSROOT := --sysroot=$(LEGATO_SYSROOT)
+  export TARGET_SYSROOT=$(LEGATO_SYSROOT)
+endif
+
+export BUILD_DIR := $(LEGATO_ROOT)/build/$(TARGET)/framework
+export INSTALL_DIR ?= $(LEGATO_ROOT)/bin
+BIN_DIR := $(BUILD_DIR)/bin
+LIB_DIR := $(BUILD_DIR)/lib
+COMMON_SRC_DIR := $(LEGATO_ROOT)/framework/daemons
+LINUX_SRC_DIR := $(COMMON_SRC_DIR)/linux
+RTOS_SRC_DIR := $(COMMON_SRC_DIR)/rtos
+
+export HOST_ARCH ?= $(shell uname -m)
+export TOOLS_ARCH ?= $(HOST_ARCH)
+
+VERSION := $(shell cat $(LEGATO_ROOT)/version)
+
+# Determine if Java is enabled
+ifeq ($(LE_CONFIG_JAVA),y)
+  ifeq ($(LE_CONFIG_JDK_INCLUDE_DIR),)
+    ifndef JDK_INCLUDE_DIR
+      ifneq ("$(wildcard $(shell which javac 2>/dev/null))","")
+        # Make sure that the version is >= Java 8
+        JDK_VERSION=$(shell /bin/sh -c "javac -version 2>&1 | awk '{print \$$2}'")
+        MIN_JDK_VERSION=1.8.0
+        ifeq ($(shell /bin/sh -c "echo -e \"${MIN_JDK_VERSION}\n${JDK_VERSION}\" | \
+            sort -C && echo OK"),OK)
+          export JDK_INCLUDE_DIR := $(shell readlink -f $(shell which javac 2>/dev/null) | \
+            sed "s:/bin/javac::")/include
+        else
+          $(warning JDK version installed on the system is too old: ${JDK_VERSION}. \
+            ${MIN_JDK_VERSION} required.)
+        endif
+      endif # end javac check
+    endif # end JDK_INCLUDE_DIR not defined
+  else # empty LE_CONFIG_JDK_INCLUDE_DIR
+    export JDK_INCLUDE_DIR := $(LE_CONFIG_JDK_INCLUDE_DIR)
+  endif # end empty LE_CONFIG_JDK_INCLUDE_DIR
+
+  LEGATO_JAVA := $(LIB_DIR)/liblegatoJni.so
+  JAVA_CLASS_DIR := $(BUILD_DIR)/java/io/legato
+  JAVA_SRC_DIR := $(LEGATO_ROOT)/framework/java/io/legato
+  JAVA_FRAMEWORK_DIR := $(LEGATO_ROOT)/framework/java
+endif # end LE_CONFIG_JAVA
+
+# Determine if Python is enabled
+ifeq ($(LE_CONFIG_PYTHON),y)
+  # Version of Python used on target and on host for cffi.
+  PYTHON := $(LE_CONFIG_PYTHON_EXECUTABLE)
+
+  # Check at least that Python and the CFFI package are installed to build Python liblegato
+  # bindings.
+  ifeq ($(shell $(PYTHON) -c "import cffi" > /dev/null 2>&1 || echo 0),0)
+    $(error LE_CONFIG_PYTHON is set, but $(PYTHON) or cffi not available)
+  endif
+
+  PYVERSION := python$(shell $(PYTHON) -c 'import sys; print("{0}.{1}".format(*sys.version_info))')
+  LEGATO_PY := $(LIB_DIR)/$(PYVERSION)/site-packages/liblegato.py
+  LEGATO_PY_SO := $(LIB_DIR)/$(PYVERSION)/site-packages/_liblegato_py.so
+  LEGATO_PY_CEXT := $(BUILD_DIR)/_liblegato_py.c
+  PYTHON_FRAMEWORK_DIR := $(LEGATO_ROOT)/framework/python
+endif
+
+# Add appropriate rules for feature/OS selections
+ALL_PARTS_y := liblegato daemons
+DAEMONS_y   :=
+
+# Currently, these options are not user configurable:
+DAEMON_CONFIGTREE  := $(LE_CONFIG_POSIX)
+DAEMON_LOGCTL      := $(LE_CONFIG_POSIX)
+DAEMON_START       := $(LE_CONFIG_POSIX)
+DAEMON_SUPERVISOR  := $(LE_CONFIG_POSIX)
+DAEMON_SVCDIR      := $(LE_CONFIG_POSIX)
+DAEMON_UPDATE      := $(LE_CONFIG_POSIX)
+DAEMON_USUPERVISOR := $(subst 0,y,$(call k2b,$(LE_CONFIG_POSIX)))
+DAEMON_WATCHDOG    := $(LE_CONFIG_POSIX)
+
+DAEMONS_$(DAEMON_START)         += $(BIN_DIR)/startSystem
+DAEMONS_$(DAEMON_SUPERVISOR)    += $(BIN_DIR)/supervisor
+DAEMONS_$(DAEMON_USUPERVISOR)   += $(LIB_DIR)/microSupervisor.o
+DAEMONS_$(DAEMON_SVCDIR)        += $(BIN_DIR)/serviceDirectory
+DAEMONS_$(DAEMON_LOGCTL)        += $(BIN_DIR)/logCtrlDaemon
+DAEMONS_$(DAEMON_CONFIGTREE)    += $(BIN_DIR)/configTree
+DAEMONS_$(DAEMON_WATCHDOG)      += $(BIN_DIR)/watchdog
+DAEMONS_$(DAEMON_UPDATE)        += $(BIN_DIR)/updateDaemon
+
+ALL_PARTS_$(LE_CONFIG_JAVA)               += $(LEGATO_JAVA)
+ALL_PARTS_$(LE_CONFIG_PYTHON)             += $(LEGATO_PY)
+ALL_PARTS_$(LE_CONFIG_BUILD_TARGET_TOOLS) += targetTools
+
+# The liblegato build is done by this ninja build script.
+NINJA_SCRIPT := $(BUILD_DIR)/build.ninja
+
+# If building with a custom framework adaptor, pull in custom definitions
+ifeq ($(LE_CONFIG_CUSTOM_FA),y)
+  -include $(LE_CONFIG_CUSTOM_FA_PATH)/fa.mk
+endif
+
+# The daemons are built using mkexe.
+LOCAL_MKEXE_FLAGS = $(MKEXE_FLAGS)
+LOCAL_MKEXE_FLAGS += -o $@ -t $(TARGET) -w $(BUILD_DIR)/$(notdir $@) -l $(LIB_DIR)
+LOCAL_MKEXE_FLAGS += -i $(BUILD_DIR)/include
+LOCAL_MKEXE_FLAGS += -i $(LEGATO_ROOT)/framework/liblegato
+LOCAL_MKEXE_FLAGS += -i $(LEGATO_ROOT)/framework/liblegato/linux
+
+# Common CFlags
+CFLAGS += -Wall -Werror \
+	-I$(LEGATO_ROOT)/framework/include \
+	-I${LEGATO_ROOT}/build/${TARGET}/framework/include \
+	-I$(LEGATO_ROOT)/framework/liblegato
+
+# Set flags for test coverage
+ifeq ($(LE_CONFIG_TEST_COVERAGE),y)
+	CFLAGS += --coverage
+endif
+
+ifeq ($(LE_CONFIG_ENABLE_IMA),y)
+  IMA_LIBS = -lssl -lcrypto
+  IMA_MKEXE_FLAGS += $(foreach lib,$(IMA_LIBS),--ldflags=$(lib))
+else
+  IMA_LIBS =
+  IMA_MKEXE_FLAGS =
+endif
+
+# ========== MAIN RECIPES ============
+
+.PHONY: all
+all: $(ALL_PARTS_y)
+	$(L) GEN md5
+	@# Computing MD5 hash for contents of framework bin and lib directories.
+	$(Q)md5=` ( if [ -e $(BIN_DIR) ] ; then \
+				find $(BIN_DIR) && \
+				find $(BIN_DIR) -type f | xargs cat && \
+				find $(BIN_DIR) -type l | xargs -r -n 1 readlink ; \
+			fi && \
+			find $(LIB_DIR) && \
+			find $(LIB_DIR) -type f | xargs cat && \
+			find $(LIB_DIR) -type l | xargs -r -n 1 readlink \
+		  ) | md5sum` && \
+	md5=$${md5%% *} && \
+	echo "$$md5" > $(BUILD_DIR)/md5 && \
+	echo "Legato Framework MD5 sum = $$md5" $(VOUTPUT)
+
+ifeq ($(LE_CONFIG_BUILD_TARGET_TOOLS),y)
+.PHONY: targetTools
+targetTools: liblegato
+	$(L) MAKE $@
+	$(Q)$(MAKE) -f Makefile.targetTools
+endif # end LE_CONFIG_BUILD_TARGET_TOOLS
+
+.PHONY: liblegato
+liblegato: $(LIB_DIR) $(NINJA_SCRIPT)
+	$(L) NINJA $(NINJA_SCRIPT)
+	$(Q)ninja $(NINJA_FLAGS) -f $(NINJA_SCRIPT)
+
+# Rules for creating directories.
+$(BUILD_DIR) $(LIB_DIR) $(BIN_DIR):
+	$(Q)mkdir -p $@
+
+# If the ninja script doesn't exist, we generate it using the ninja-generator script.
+$(NINJA_SCRIPT): | $(BUILD_DIR)
+	$(L) GEN $@
+	$(Q)framework/liblegato/ninja-generator
+
+# ========== EXTRA RECIPES ============
+
+# Java recipes
+ifeq ($(LE_CONFIG_JAVA),y)
+$(BUILD_DIR)/java:
+	$(Q)mkdir -p $@
+
+$(JAVA_CLASS_DIR)/*.class: $(JAVA_SRC_DIR)/*.java | $(BUILD_DIR)/java
+	$(L) JAVAC $@
+	$(Q)javac $^ -d $(BUILD_DIR)/java
+
+$(LIB_DIR)/legato.jar: $(JAVA_CLASS_DIR)/*.class
+	$(L) JAR $@
+	$(Q)jar -cf $@ -C $(BUILD_DIR)/java .
+
+$(BUILD_DIR)/legatoJni.h: $(LIB_DIR)/legato.jar
+	$(L) JAVAH $@
+	$(Q)javah -o $@ -jni -cp $< io.legato.LegatoJni
+
+$(BUILD_DIR)/legatoJni.o: $(JAVA_FRAMEWORK_DIR)/legatoJni/legatoJni.c $(BUILD_DIR)/legatoJni.h
+	$(L) CC $@
+	$(Q)$(CCACHE) $(TARGET_CC) $(TARGET_CC_SYSROOT) \
+		-DLEGATO_EMBEDDED \
+		-fPIC \
+		$(CFLAGS) \
+		-I$(BUILD_DIR) \
+		-I$(JDK_INCLUDE_DIR) \
+		-I$(JDK_INCLUDE_DIR)/linux \
+		-g \
+		-O0 \
+		-o $(BUILD_DIR)/legatoJni.o \
+		-c $(JAVA_FRAMEWORK_DIR)/legatoJni/legatoJni.c
+
+$(LEGATO_JAVA): $(LIB_DIR) $(BUILD_DIR)/legatoJni.o
+	$(L) CCLD $@
+	$(Q)$(CCACHE) $(TARGET_CC) $(TARGET_CC_SYSROOT) \
+		-fPIC \
+		-shared \
+		-o $@ \
+		$(BUILD_DIR)/legatoJni.o \
+		-L$(LIB_DIR) \
+		-llegato \
+		-lpthread \
+		-lrt
+endif # end LE_CONFIG_JAVA
+
+# Python recipes
+ifeq ($(LE_CONFIG_PYTHON),y)
+$(LEGATO_PY_CEXT): $(PYTHON_FRAMEWORK_DIR)/generate_cdefs.sh $(PYTHON_FRAMEWORK_DIR)/generate_c.py
+	$(L) GEN $@
+	$(Q)rm -rf $(BUILD_DIR)/_py_cdefs/
+	$(Q)mkdir $(BUILD_DIR)/_py_cdefs/
+	$(Q)bash $(PYTHON_FRAMEWORK_DIR)/generate_cdefs.sh "$(BUILD_DIR)/_py_cdefs/"
+	$(Q)$(PYTHON) $(PYTHON_FRAMEWORK_DIR)/generate_c.py "$(BUILD_DIR)/_py_cdefs" $(BUILD_DIR) \
+		> /dev/null
+
+$(LEGATO_PY_SO): liblegato $(LEGATO_PY_CEXT)
+	$(Q)mkdir -p $(dir $@)
+	$(L) CCLD $@
+	$(Q)$(CCACHE) $(TARGET_CC) $(TARGET_CC_SYSROOT) -o $@ $(LEGATO_PY_CEXT) \
+		-D_FTS_H                                                            \
+		-fPIC                                                               \
+		-shared                                                             \
+		-pthread                                                            \
+		-I$(LEGATO_SYSROOT)/usr/include/$(PYVERSION)                        \
+		-IC                                                                 \
+		$(CFLAGS)                                                           \
+		-Wl,--enable-new-dtags,-rpath="\$$ORIGIN/../lib"                    \
+		-L$(LIB_DIR) -llegato -l$(PYVERSION)
+
+$(LEGATO_PY): $(LEGATO_ROOT)/framework/python/liblegato.py $(LEGATO_PY_SO)
+	$(Q)cp $< $@
+endif # end LE_CONFIG_PYTHON
+
+# ========== DAEMON RECIPES ============
+
+.PHONY: daemons
+daemons: $(DAEMONS_y)
+
+$(LIB_DIR)/microSupervisor.o: $(RTOS_SRC_DIR)/microSupervisor/microSupervisor.c liblegato $(BIN_DIR)
+	$(L) CC $@
+	$(Q)$(CCACHE) $(CC) $(TARGET_CC_SYSROOT) -o $@ -c $< $(CFLAGS)
+
+$(BIN_DIR)/startSystem: $(LINUX_SRC_DIR)/start/start.c $(LINUX_SRC_DIR)/common/ima.c | liblegato $(BIN_DIR)
+	$(L) CCLD $@
+	$(Q)$(CCACHE) $(TARGET_CC) $(TARGET_CC_SYSROOT) -o $@ $^ $(CFLAGS) \
+		-I$(LEGATO_ROOT)/framework/liblegato/linux \
+		-I$(LEGATO_ROOT)/framework/daemons/linux/common \
+		$(LIB_DIR)/liblegato.a $(IMA_LIBS) -ldl -lpthread
+
+$(BIN_DIR)/supervisor: liblegato $(BIN_DIR)
+	$(L) MKEXE $@
+	$(Q)mkexe $(LOCAL_MKEXE_FLAGS) \
+		$(LINUX_SRC_DIR)/supervisor \
+		-i $(LEGATO_ROOT)/interfaces/supervisor \
+		-i $(LEGATO_ROOT)/framework/daemons/linux/start \
+		-i $(LEGATO_ROOT)/framework/daemons/linux/common \
+		$(IMA_MKEXE_FLAGS) \
+		--cflags=-DNO_LOG_CONTROL
+
+$(BIN_DIR)/serviceDirectory: liblegato $(BIN_DIR)
+	$(L) MKEXE $@
+	$(Q)mkexe $(LOCAL_MKEXE_FLAGS) \
+		$(LINUX_SRC_DIR)/serviceDirectory \
+		--cflags=-DNO_LOG_CONTROL
+
+$(BIN_DIR)/logCtrlDaemon: liblegato $(BIN_DIR)
+	$(L) MKEXE $@
+	$(Q)mkexe $(LOCAL_MKEXE_FLAGS) \
+		$(LINUX_SRC_DIR)/logDaemon \
+		--cflags=-DNO_LOG_CONTROL \
+		-i $(LEGATO_ROOT)/interfaces/supervisor
+
+$(BIN_DIR)/configTree: liblegato $(BIN_DIR)
+	$(L) MKEXE $@
+	$(Q)mkexe $(LOCAL_MKEXE_FLAGS)   \
+		$(COMMON_SRC_DIR)/configTree \
+		--cflags=-std=c99
+
+$(BIN_DIR)/watchdog: liblegato $(BIN_DIR)
+	$(L) MKEXE $@
+	$(Q)mkexe $(LOCAL_MKEXE_FLAGS) \
+		$(LINUX_SRC_DIR)/watchdog/watchdogDaemon
+
+$(BIN_DIR)/updateDaemon: liblegato $(BIN_DIR)
+	$(L) MKEXE $@
+	$(Q)mkexe $(LOCAL_MKEXE_FLAGS) \
+		$(LINUX_SRC_DIR)/updateDaemon \
+		-i $(LEGATO_ROOT)/interfaces/updateDaemon \
+		-i $(LEGATO_ROOT)/components/appCfg \
+		-i $(LEGATO_ROOT)/framework/daemons/linux/common \
+		-s $(LEGATO_ROOT)/components \
+		-s $(LINUX_SRC_DIR)/updateDaemon \
+		--ldflags=-L$(LIB_DIR) \
+		$(IMA_MKEXE_FLAGS)

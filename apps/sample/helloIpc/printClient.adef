@@ -1,0 +1,17 @@
+executables:
+{
+    client = (printClient)
+}
+
+processes:
+{
+    run:
+    {
+        (client)
+    }
+}
+
+bindings:
+{
+    client.printClient.printer -> printServer.printer
+}

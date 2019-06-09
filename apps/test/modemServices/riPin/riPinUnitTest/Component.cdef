@@ -1,0 +1,20 @@
+requires:
+{
+    api:
+    {
+        modemServices/le_riPin.api       [types-only]
+    }
+}
+
+cflags:
+{
+    -I${LEGATO_ROOT}/components/watchdogChain
+}
+
+sources:
+{
+    main.c
+    riPinStubs.c
+    ${LEGATO_ROOT}/components/modemServices/modemDaemon/le_riPin.c
+    simu/components/le_pa/pa_riPin_simu.c
+}

@@ -1,0 +1,24 @@
+bundles:
+{
+    file:
+    {
+        files/xyz  /usr/share/files/
+        files/xyz  /usr/share/files/abc
+    [r] ${BUILD_DIR}/libexternal/libexternal.$TARGET.so  /lib/
+    }
+
+    dir:
+    {
+          files     /
+    [x]   bin       /
+    [r] libexternal /lib/
+    }
+}
+
+processes:
+{
+    run:
+    {
+        ( /bin/helloMessage )
+    }
+}

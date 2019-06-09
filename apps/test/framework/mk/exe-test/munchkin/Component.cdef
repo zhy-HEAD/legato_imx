@@ -1,0 +1,15 @@
+bundles:
+{
+    file:
+    {
+        [rx] foo/bar /usr/local/share/
+        baz /usr/local/toto
+    }
+}
+
+sources
+
+:
+{
+warp.c
+}

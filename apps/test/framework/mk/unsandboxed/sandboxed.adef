@@ -1,0 +1,31 @@
+sandboxed: true
+
+groups:
+{
+ www-data
+ jokers
+}
+
+maxFileSystemBytes: 100K
+
+groups:
+{
+}
+
+executables:
+{
+  hello = ( helloWorld )
+}
+
+groups:
+{
+  dialout
+}
+
+processes:
+{
+  run: { hey = ( hello ) }
+}
+
+groups:
+{}

@@ -1,0 +1,16 @@
+requires:
+{
+    api:
+    {
+        le_appCtrl.api      [manual-start]
+        le_framework.api    [manual-start]
+        le_appInfo.api      [manual-start]
+        le_cfg.api          [manual-start]
+        le_appProc.api      [manual-start]
+    }
+}
+
+sources:
+{
+    appCtrl.c
+}

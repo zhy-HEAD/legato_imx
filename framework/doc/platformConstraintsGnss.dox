@@ -1,0 +1,260 @@
+/** @page platformConstraintsGnss GNSS platform constraints
+
+@section platformConstraintsGnss_acqRate Acquisition rate
+
+The le_gnss_SetAcquisitionRate() function configures the GNSS device acquisition rate.
+
+On Qualcomm-based platform the “tracking” mode is selected for the “continuous” navigation.
+
+When a hot start is requested, it is possible that GPS engine can’t get fix within first 1s, hence
+NMEA message can possibly get empty frame outputs every second.
+Tracking mode is based on periodic hot start: periodically, low layer GPS engine starts a new
+session and updates GPS location until it gets a fix, from which NMEA output can be composed.
+
+In other words, after first fix is gotten, GPS engine restart the GPS session to get the fix again,
+it will not output the last valid fix before we get the new fix, and NMEA message can get empty
+frame again.
+
+The 'Acquisition Rate' value is used to set the interval between two fix requests.
+
+Qualcomm-based platform hot start performance is about 1~3s, it’s an average value. So you may
+notice a void NMEA string (and the corresponding Legato position sample notification) during hot
+start and then the valid NMEA string on an AcquisitionRate minimum time interval.
+But it’s should not be so accurate, you may have 1~3s error-range.
+
+Here below an example of NMEA traces in tracking mode with a 30-second acquisition rate.
+Note the GPGGA string sequence:
+
+@verbatim
+
+$GPVTG,,T,,M,,N,,K,N*2C
+$GPGSA,A,1,,,,,,,,,,,,,,,*1E
+        $GPGGA,,,,,,0,,,,,,,,*66                -> say it’s 1st second from logging start, no fix from beginning for 1st GPS session
+$PQXFI,,,,,,,,,,*56
+$GPRMC,,V,,,,,,,,,,N*53
+$GPGSV,2,1,05,02,,,42,06,48,299,50,09,53,213,50,19,28,230,43*48
+$GPGSV,2,2,05,31,09,029,*4C
+        $GPGGA,100836.0,4849.944172,N,00216.094351,E,1,03,1.7,54.2,M,48.0,M,,*69  -> second 2 from start (100836), get the fix for 1st session
+$PQXFI,100836.0,4849.944172,N,00216.094351,E,54.2,5.74,11.44,1.86*6A
+$GPVTG,318.5,T,320.6,M,0.0,N,0.0,K,A*2B
+$GPRMC,100836.0,A,4849.944172,N,00216.094351,E,0.0,318.5,220116,2.1,W,A*12 valid final NMEA
+$GPGSA,A,2,06,09,19,,,,,,,,,,2.0,1.7,1.0*31
+$GPVTG,,T,,M,,N,,K,N*2C
+$GPGSA,A,1,,,,,,,,,,,,,,,*1E
+        $GPGGA,,,,,,0,,,,,,,,*66               -> second 31, no fix for 2nd GPS session
+$PQXFI,,,,,,,,,,*56
+$GPRMC,,V,,,,,,,,,,N*53 non valid intermediate NMEA
+$GPGSV,2,1,05,02,,,41,06,49,299,49,09,53,213,48,19,28,230,43*4B
+$GPGSV,2,2,05,31,09,029,*4C
+        $GPGGA,100906.0,4849.942986,N,00216.093882,E,1,03,1.7,48.3,M,48.0,M,,*60  -> second 32 from start (100906, 30s after 100836), get the fix for 2nd session
+$PQXFI,100906.0,4849.942986,N,00216.093882,E,48.3,7.25,15.04,0.77*6A
+$GPVTG,318.5,T,320.6,M,0.0,N,0.0,K,A*2B
+$GPRMC,100906.0,A,4849.942986,N,00216.093882,E,0.0,318.5,220116,2.1,W,A*17
+$GPGSA,A,2,06,09,19,,,,,,,,,,2.0,1.7,1.0*31
+$GPVTG,,T,,M,,N,,K,N*2C
+$GPGSA,A,1,,,,,,,,,,,,,,,*1E
+$       GPGGA,,,,,,0,,,,,,,,*66               -> second 61, no fix for 3rd session
+$PQXFI,,,,,,,,,,*56
+$GPRMC,,V,,,,,,,,,,N*53
+$GPGSV,2,1,05,02,,,43,06,49,298,50,09,53,213,47,19,27,230,44*47
+$GPGSV,2,2,05,31,09,029,*4C
+$GPGGA,100936.0,4849.941714,N,00216.095230,E,1,03,1.7,55.9,M,48.0,M,,*66  -> second 62 from start (100936, 30s after 100906), get the fix for 3rd session
+$PQXFI,100936.0,4849.941714,N,00216.095230,E,55.9,15.01,27.89,0.34*5A
+$GPVTG,318.5,T,320.6,M,0.0,N,0.0,K,A*2B
+$GPRMC,100936.0,A,4849.941714,N,00216.095230,E,0.0,318.5,220116,2.1,W,A*17
+$GPGSA,A,2,06,09,19,,,,,,,,,,2.0,1.7,1.0*31
+$GPVTG,,T,,M,,N,,K,N*2C
+$GPGSA,A,1,,,,,,,,,,,,,,,*1E
+$GPGGA,,,,,,0,,,,,,,,*66
+
+@endverbatim
+
+@section platformConstraintsGnss_nmeaMask Enabled NMEA sentences
+
+@c le_gnss_SetNmeaSentences() function configures the enabled NMEA sentences in the NMEA flow and
+@c le_gnss_GetNmeaSentences() function gets the enabled NMEA sentences.
+
+Not all NMEA sentences are supported by the different platforms. The table below lists the supported
+NMEA sentences for each platform.
+
+| NMEA sentences           |  AR7  | AR758x | AR759x |  AR8652 | WP750x | WP76xx | WP77xx | WP85  |
+| -------------------------| ----- | ------ | ------ | ------- | ------ | ------ | ------ | ----- |
+| LE_GNSS_NMEA_MASK_GPGGA  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GPGSA  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GPGSV  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GPRMC  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GPVTG  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GLGSV  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GNGNS  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GNGSA  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GAGGA  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |       |
+| LE_GNSS_NMEA_MASK_GAGSA  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |       |
+| LE_GNSS_NMEA_MASK_GAGSV  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |       |
+| LE_GNSS_NMEA_MASK_GARMC  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |       |
+| LE_GNSS_NMEA_MASK_GAVTG  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |       |
+| LE_GNSS_NMEA_MASK_PSTIS  |   X   |        |        |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_PQXFI  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_PTYPE  |   X   |   X    |   X    |    X    |    X   |   X    |   X    |   X   |
+| LE_GNSS_NMEA_MASK_GPGRS  |       |   X    |   X    |         |        |        |        |       |
+| LE_GNSS_NMEA_MASK_GPGLL  |       |   X    |   X    |         |        |        |        |       |
+| LE_GNSS_NMEA_MASK_DEBUG  |       |        |        |         |        |   X    |   X    |       |
+| LE_GNSS_NMEA_MASK_GPDTM  |       |   X    |   X    |         |        |        |        |       |
+| LE_GNSS_NMEA_MASK_GAGNS  |       |   X    |   X    |         |        |        |        |       |
+
+
+@deprecated LE_GNSS_NMEA_MASK_PQXFI is deprecated. LE_GNSS_NMEA_MASK_PTYPE supporting all
+proprietary type masks, should be used instead.
+Setting LE_GNSS_NMEA_MASK_PTYPE will also set LE_GNSS_NMEA_MASK_PQXFI.
+
+Please note that the Qualcomm-based firmware release
+<c>SWI9X15A_07.10.15.00</c> (AR755x, AR8652) is subject to some limitations:
+- Not all NMEA sentences supported by the AT!GPSNMEASENTENCE can be (de)activated through
+the Legato API: the @c GPGSV_EXTENDED and @c GPGRS NMEA sentences are not available.
+- The Galileo NMEA sentences always appear as not enabled when retrieving their status, even if
+they are enabled. This concerns the @c GAGGA, @c GAGSA, @c GAGSV, @c GARMC, and @c GAVTG
+NMEA sentences.
+
+@section platformConstraintsGnss_ConstellationType Constellation type
+
+@c le_gnss_SetConstellation() function configures the constellation type and
+@c le_gnss_GetConstellation() function gets the enabled constellation type.
+
+Not all constellation types are supported by the different platforms. The table below lists the
+supported constellation types for each platform.
+
+| Constellation type            | AR7 | AR758x | AR759x | AR8652 | WP750x | WP76xx | WP77xx | WP85 |
+| ----------------------------- | --- | ------ | ------ | ------ | ------ | ------ | ------ | ---- |
+| LE_GNSS_CONSTELLATION_GPS     |     |   X    |   X    |        |        |        |        |  X   |
+| LE_GNSS_CONSTELLATION_GLONASS |     |   X    |   X    |        |        |        |        |  X   |
+| LE_GNSS_CONSTELLATION_BEIDOU  |     |   X    |   X    |        |        |        |        |      |
+| LE_GNSS_CONSTELLATION_GALILEO |     |   X    |   X    |        |        |        |        |      |
+| LE_GNSS_CONSTELLATION_SBAS    |     |        |        |        |        |        |        |      |
+| LE_GNSS_CONSTELLATION_QZSS    |     |   X    |   X    |        |        |        |        |      |
+
+@section platformConstraintsGnss_SettingConfiguration Setting configuration
+
+This section summarizes for each GNSS setting API, on Qualcomm-based platform, how the setting is
+performed.
+
+Most of the APIs write the setting into a non volatile (NV) memory at each call, making it
+persistent to reset. Pay attention that in this case, a reboot of the device is required to take the
+change into account.
+For exemple, a new constellation set by le_gnss_SetConstellation() is only valid after a reboot of
+the module.
+Enabling/Disabling the 'Extended Ephemeris' file injection into the GNSS device set by
+le_gnss_EnableExtendedEphemerisFile()/le_gnss_DisableExtendedEphemerisFile() is only valid after a
+reboot of the module.
+
+It is recommended to call these APIs, for which the setting takes effect after a reboot, only once
+in a GNSS session.
+
+Other APIs don't write the setting into a non volatile memory making it lost after a device reboot.
+This setting is operational imediately in the next GNSS session (no reboot is needed).
+However, there are difference upon GNSS restart session and upon Legato restart.
+
+The following APIs write the setting to NV, the setting is persistent and effective after
+reboot:<br>
+    le_gnss_SetConstellation()<br>
+    le_gnss_EnableExtendedEphemerisFile()<br>
+    le_gnss_DisableExtendedEphemerisFile()<br>
+    le_gnss_SetSuplServerUrl()<br>
+    le_gnss_SetNmeaSentences()<br>
+    le_gnss_SetMinElevation()<br>
+
+The following APIs don't write the setting to NV, the setting is thus not persistent to reboot but
+effective imediately in next GNSS session. The setting is persistent to GNSS factory/cold/warm/hot
+restart, but is lost after Legato restart:<br>
+    le_gnss_Enable()<br>
+    le_gnss_Disable()<br>
+    le_gnss_SetAcquisitionRate()<br>
+
+The following APIs don't write the setting to NV, the setting is thus not persistent to reboot but
+effective imediately in next GNSS session. The setting is persistent to GNSS factory/cold/warm/hot
+restart, but is not lost after Legato restart:
+    le_gnss_SetSuplAssistedMode()
+
+@section platformConstraintsGnss_WarmRestart GNSS WARM restart
+
+Qualcomm-based platform "WARM" restart GNSS session needs an addional 10 sec internal delay
+comparing to "COLD" or "FACTORY" restarts.
+
+"WARM" restart le_gnss_ForceWarmRestart() API stops the current GNSS session then starts it again
+using the available GNSS data. In this case, the Ephemeris are being cleared but not the position
+data (they are cleared in "COLD" or "FACTORY" restarts).
+Reusing them after restarting the GNSS session too soon leads to a wrong time to First Fix (TTFF).
+For this reason a 10 sec delay is added before the restart session.
+
+Note that this additional delay doesn't impact the measurement to get a fix given by
+le_gnss_GetTtff(). This API calculates the TTFF started from a succeed GNSS start session.
+In case of le_gnss_ForceWarmRestart(), the 10 sec delay is added before re-starting the GNSS
+session.
+
+@note le_gnss_StartMode() function is not supported on Qualcomm-based platform.
+
+@section platformConstraintsGnss_ColdRestart GNSS COLD restart
+
+"COLD" restart le_gnss_ForceColdRestart() API stops the current GNSS session then starts it again.
+In this case, the Ephemeris, time and position data are being cleared.
+
+@note On modules AR758x & AR759x when performed "COLD" restart there is a possibility for
+longitude/latitude values to get retrieved from camped live cell network before getting the fix.
+
+@note le_gnss_StartMode() function is not supported on Qualcomm-based platform.
+
+@section platformConstraintsGnss_FactoryRestart GNSS FACTORY restart
+
+"FACTORY" restart le_gnss_ForceFactoryRestart() API stops the current GNSS session then starts
+it again. In this case, all constellation's service data are being cleared.
+
+Modem gets these constellation service data from Qualcomm CDMA Technologies(QCT) location
+service.<br><br>
+<b>Constellation service data:</b><br>
+- <b>Clock Information</b><br>
+- <b>Cell database service data</b><br>
+   Cell database position<br>
+   Cell database latest GPS position<br>
+   Cell database Over The Air(OTA) position<br>
+   Cell database external reference position<br>
+   Cell database time tag<br>
+   Cell database cell ID<br>
+   Cell database cached cell ID<br>
+   Cell database last service cell<br>
+   Cell database current service cell<br>
+   Cell database neighbor information<br>
+- <b>Common service data</b><br>
+   Position estimate; common for all GNSS types<br>
+   Reset all clock information<br>
+   Universal Time Coordinated(UTC) estimate<br>
+   Real Time Information(RTI)<br>
+   Frequency bias estimate; common for all GNSS types<br>
+- <b>Satellite data</b><br>
+
+@note On modules AR758x & AR759x when performed "FACTORY" restart there is a possibility for
+longitude/latitude values to get retrieved from camped live cell network before getting the fix.
+
+@note le_gnss_StartMode() function is not supported on Qualcomm-based platform.
+
+@section platformConstraintsGnss_speedAccuracies Horizontal and Vertical speed accuracies
+
+@c le_gnss_GetVerticalSpeed() function returns the vertical speed accuracy.
+@c le_gnss_GetHorizontalSpeed() function returns the horizontal speed accuracy.
+
+The vertical speed accuracy and the horizontal speed accuracy are calculated differently depending
+on the platforms:
+
+On AR7, AR8652, WP750x and WP85, horizontal and vertical speed accuracies are calculated based on
+the 3-D Speed uncertainty (unis: units: meters/second).
+
+On AR758x, AR759x, WP76xx and WP77xx horizontal and vertical speed accuracies are calculated with
+the velocity uncertainty information for ENU (East, North and Up) direction (units: meters/second).
+Horizontal speed accuracy = sqrt(East^2 + North^2) and vertical speed accuracy = Up
+
+
+@section platformConstraintsGnss_References References
+
+See @ref c_gnss API
+
+Copyright (C) Sierra Wireless Inc.
+
+**/
+

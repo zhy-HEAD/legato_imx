@@ -1,0 +1,37 @@
+sandboxed: false
+
+executables:
+{
+    secStore = ( $LEGATO_ROOT/components/secStore/secStoreDaemon )
+}
+
+processes:
+{
+    run:
+    {
+        (secStore)
+    }
+
+    faultAction: restart
+    #if ${LE_CONFIG_SERVICES_WATCHDOG} = y
+        maxWatchdogTimeout: 120000
+    #else
+        watchdogTimeout: never
+    #endif
+}
+
+extern:
+{
+    secStore.secStoreDaemon.le_secStore
+    secStore.secStoreDaemon.secStoreAdmin
+    secStore.secStoreDaemon.secStoreGlobal
+}
+
+
+bindings:
+{
+    secStore.secStoreDaemon.le_appInfo -> <root>.le_appInfo
+    secStore.secStoreDaemon.le_update -> <root>.le_update
+    secStore.watchdogChain.le_wdog -> <root>.le_wdog
+}
+

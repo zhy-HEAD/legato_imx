@@ -1,0 +1,338 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * @page c_fwupdate Firmware Update API
+ *
+ * @ref le_fwupdate_interface.h "API Reference"
+ *
+ * <HR>
+ *
+ * Firmware update allows the various firmware images to be updated from the application processor.
+ * This may include the modem bootloader, modem firmware, and linux image, where the linux image
+ * consists of the linux bootloader, linux kernel, and linux rootfs.
+ *
+ * Firmware update is useful when the image comes from an alternative source, rather than as an
+ * over-the-air update through the AirVantage service.
+ *
+ * @section le_fwupdate_binding IPC interfaces binding
+ *
+ * All the functions of this API are provided by the @b le_fwupdate service.
+ *
+ * Here's a code sample binding to the le_fwupdate service:
+ * @verbatim
+   bindings:
+   {
+      clientExe.clientComponent.le_fwupdate -> fwupdateService.le_fwupdate
+   }
+   @endverbatim
+ *
+ *
+ * @warning All of these APIs are not available for all platforms. Please refer to the
+ * Product Technical specification document of your platform for further details.
+ * Please refer to @subpage platformConstraintsDualSys for details on Dual System.
+ *
+ * @section le_fwupdate_image Update Firmware Image
+ *
+ * The firmware update process is started by calling le_fwupdate_Download().  This function takes
+ * a file descriptor, rather than a file, to provide flexibility in the source of the image.  In
+ * particular, this can be used to stream the image, rather than having to save it on the file
+ * system before doing the update.
+ *
+ * On platform which does not support dual system, when the image is successfully downloaded, a
+ * reset will occur in order to apply the update. This will reset all processors.  After the
+ * application processor has restarted, the @ref le_info_version APIs can be used to determine
+ * whether the firmware has been updated to the new version.
+ *
+ * On platform which supports dual system, if the image is successfully downloaded, the user needs
+ * to swap the systems in order to use the updated system. This will reset all processors. After the
+ * application processor has restarted, the @ref le_info_version APIs can be used to determine
+ * whether the firmware has been updated to the new version.
+ *
+ * @section le_fwupdate_resume Update Firmware Image Download Resume
+ *
+ * During the download, the flash programming position is saved. Thanks to this position, fwupdate
+ * service is able to resume the download without downloading the update package at the beginning.
+ *
+ * By default, the fwupdate service download API is resuming the previous download: new data
+ * received through this API will be programmed at the resume position.
+ *
+ * @note
+ * A download can be resumed when:
+ * - le_fwupdate_Download() API has previously returned LE_CLOSED or LE_TIMEOUT
+ * - A reset occured during last le_fwupdate_Download() processing (Legato/full system reset)
+ * - No resume can be performed in other cases.
+ *
+ * A complete download can be forced by calling le_fwupdate_InitDownload(). Resume position
+ * is set to 0.
+ *
+ * The current resume position can be retrieved by calling le_fwupdate_GetResumePosition().
+ *
+ * <HR>
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @file le_fwupdate_interface.h
+ *
+ * Legato @ref c_fwupdate include file.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum length of a version string, excluding any termination character.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE MAX_VERS_LEN   = 256;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Maximum length of the update status label
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE STATUS_LABEL_LENGTH_MAX = 32;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Update status
+ * Indicates either a success or the defective image partition.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM UpdateStatus
+{
+    UPDATE_STATUS_OK,              ///< Last update succeeded
+    UPDATE_STATUS_PARTITION_ERROR, ///< At least, a partition is corrupted
+    UPDATE_STATUS_DWL_ONGOING,     ///< Downloading in progress
+    UPDATE_STATUS_DWL_FAILED,      ///< Last downloading failed
+    UPDATE_STATUS_DWL_TIMEOUT,     ///< Last downloading ended with timeout
+    UPDATE_STATUS_UNKNOWN          ///< Unknown status. It has to be the last one.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Download the firmware image file. The function can also be used to resume the download if the
+ * le_fwupdate_InitDownload() function is not called before.
+ *
+ * @return
+ *      - LE_OK              On success
+ *      - LE_BAD_PARAMETER   If an input parameter is not valid
+ *      - LE_TIMEOUT         After 900 seconds without data received
+ *      - LE_NOT_POSSIBLE    The systems are not synced
+ *      - LE_UNAVAILABLE     The flash access is not granted for SW update
+ *      - LE_CLOSED          File descriptor has been closed before all data have been received
+ *      - LE_OUT_OF_RANGE    Storage is too small
+ *      - LE_FAULT           On failure
+ *
+ * @note
+ *      The process exits, if an invalid file descriptor (e.g. negative) is given.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t Download
+(
+    file fd IN     ///< File descriptor of the image, opened to the start of the image.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Download initialization:
+ *  - for single and dual systems, it resets resume position,
+ *  - for dual systems, it synchronizes the systems if needed.
+ *
+ * @note
+ *      When invoked, resuming a previous download is not possible, a full update package has to be
+ *      downloaded.
+ *
+ * @return
+ *      - LE_OK         On success
+ *      - LE_FAULT      On failure
+ *      - LE_IO_ERROR   Dual systems platforms only -- The synchronization fails due to
+ *                      unrecoverable ECC errors. In this case, the update without synchronization
+ *                      is forced, but the whole system must be updated to ensure that the new
+ *                      update system will be workable
+ *                      ECC stands for Error-Correction-Code: some errors may be corrected. If this
+ *                      correction fails, a unrecoverable error is registered and the data become
+ *                      corrupted.
+ *      - LE_NO_MEMORY  On memory allocation failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t InitDownload
+(
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return the downloaded update package write position.
+ *
+ * @return
+ *      - LE_OK              On success
+ *      - LE_BAD_PARAMETER   The given parameter is invalid.
+ *      - LE_FAULT           On failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetResumePosition
+(
+    size position  OUT    ///< Update package read position
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return the update status.
+ *
+ * @return
+ *      - LE_OK on success
+ *      - LE_BAD_PARAMETER Invalid parameter
+ *      - LE_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetUpdateStatus
+(
+    UpdateStatus status                         OUT, ///< Returned update status
+    string statusLabel[STATUS_LABEL_LENGTH_MAX] OUT  ///< Description of the status
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the firmware version string
+ *
+ * @return
+ *      - LE_OK          on success
+ *      - LE_NOT_FOUND   if the version string is not available
+ *      - LE_OVERFLOW    if version string to big to fit in provided buffer
+ *      - LE_FAULT       for any other errors
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetFirmwareVersion
+(
+    string version[MAX_VERS_LEN] OUT     ///< Firmware version string
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the bootloader version string
+ *
+ * @return
+ *      - LE_OK          on success
+ *      - LE_NOT_FOUND   if the version string is not available
+ *      - LE_OVERFLOW    if version string to big to fit in provided buffer
+ *      - LE_FAULT       for any other errors
+ *
+ * @note If the caller is passing a bad pointer into this function, it is a fatal error, the
+ *       function will not return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetBootloaderVersion
+(
+    string version[MAX_VERS_LEN] OUT     ///< Bootloader version string
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the app bootloader version string
+ *
+ * @return
+ *      - LE_OK             on success
+ *      - LE_NOT_FOUND      if the version string is not available
+ *      - LE_OVERFLOW       if version string to big to fit in provided buffer
+ *      - LE_BAD_PARAMETER  bad parameter
+ *      - LE_UNSUPPORTED    not supported
+ *      - LE_FAULT          for any other errors
+ *
+ * @note If the caller passes in a bad pointer, it is a fatal error and the function won't return.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t GetAppBootloaderVersion
+(
+    string version[MAX_VERS_LEN] OUT     ///< Bootloader version string
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the status of the system.
+ *
+ * Dual System: Indicates if Active and Update systems are synchronized
+ * Single System: This api is not supported on single system.
+ *
+ * @return
+ *      - LE_OK            On success
+ *      - LE_UNSUPPORTED   The feature is not supported
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t IsSystemMarkedGood
+(
+    bool isSystemGood OUT ///< true if the system is marked good, false otherwise
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Request to install the package. Calling this API will result in a system reset.
+ *
+ * Dual System: After reset, the UPDATE and ACTIVE systems will be swapped.
+ * Single System: After reset, the image in the FOTA partition will be installed on the device.
+ *
+ * @note On success, a device reboot is initiated without returning any value.
+ *
+ *
+ * @return
+ *      - LE_BUSY          Download is ongoing, install is not allowed
+ *      - LE_UNSUPPORTED   The feature is not supported
+ *      - LE_FAULT         On failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t Install
+(
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark the current system as good.
+ *
+ * Dual System: Requests a system Sync. The UPDATE system will be synchronised with the ACTIVE one.
+ * Single System: This api is not supported on single system.
+ *
+ * @return
+ *      - LE_OK            On success
+ *      - LE_UNSUPPORTED   The feature is not supported
+ *      - LE_UNAVAILABLE   The flash access is not granted for SW update
+ *      - LE_FAULT         On failure
+ *      - LE_IO_ERROR      Dual systems platforms only -- The synchronization fails due to
+ *                         unrecoverable ECC errors
+ *                         ECC stands for Error-Correction-Code: some errors may be corrected. If
+ *                         this correction fails, an unrecoverable error is registered and the data
+ *                         become corrupted.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t MarkGood
+(
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Request to install the package and marks the system as good. Calling this API will result in a
+ * system reset.
+ *
+ * Dual System: Request a full system reset with a systems SWAP and systems SYNC. After the reset,
+ * the UPDATE and ACTIVE systems will be swapped and synchronized.
+ * Single System: Installs the package from the FOTA partition.
+ *
+ *
+ * @note On success, a device reboot is initiated without returning any value.
+ *
+ * @return
+ *      - LE_FAULT         On failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t InstallAndMarkGood
+(
+);
+

@@ -1,0 +1,10 @@
+//--------------------------------------------------------------------------------------------------
+// Target definitions specific to localhost (native) builds.
+//
+// Copyright (C), Sierra Wireless Inc.
+//--------------------------------------------------------------------------------------------------
+
+buildVars:
+{
+    LEGATO_DCS_PA = ${PA_DIR}/dcs/linux/components/le_pa_dcs
+}

@@ -1,0 +1,17 @@
+sources: {foo.c }
+
+bundles:
+{
+    file:
+    {
+        [r] foo.c  /usr/src/
+    }
+}
+
+requires:
+{
+    lib:
+    {
+        m
+    }
+}

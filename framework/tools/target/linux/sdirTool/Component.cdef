@@ -1,0 +1,12 @@
+sources:
+{
+    sdirTool.c
+}
+
+requires:
+{
+    api:
+    {
+        le_cfg.api  [manual-start]
+    }
+}

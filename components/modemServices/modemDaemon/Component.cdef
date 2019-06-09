@@ -1,0 +1,85 @@
+requires:
+{
+    api:
+    {
+        le_cfg.api
+        le_pm.api
+    }
+
+    component:
+    {
+        ${LEGATO_ROOT}/components/watchdogChain
+    }
+}
+
+provides:
+{
+    api:
+    {
+        modemServices/le_info.api
+        modemServices/le_sms.api
+        modemServices/le_mrc.api
+        modemServices/le_sim.api
+        modemServices/le_mdc.api
+        modemServices/le_mcc.api
+        modemServices/le_ecall.api
+        modemServices/le_ips.api
+        modemServices/le_temp.api
+        modemServices/le_antenna.api
+        modemServices/le_riPin.api
+        modemServices/le_adc.api
+        modemServices/le_rtc.api
+        modemServices/le_mdmCfg.api
+        modemServices/le_lpt.api
+    }
+}
+
+sources:
+{
+    le_info.c
+    le_mcc.c
+    le_mdc.c
+    le_mrc.c
+    le_ms.c
+    le_sim.c
+    le_sms.c
+    smsPdu.c
+    cdmaPdu.c
+    asn1Msd.c
+    le_ecall.c
+    le_ips.c
+    le_temp.c
+    le_antenna.c
+    le_riPin.c
+    le_adc.c
+    le_rtc.c
+    sysResets.c
+    le_mdmCfg.c
+    le_lpt.c
+}
+
+cflags:
+{
+    -I$CURDIR
+    -I$LEGATO_ROOT/components/modemServices/platformAdaptor/inc
+    -I$LEGATO_ROOT/components/cfgEntries
+    -I${LEGATO_ROOT}/components/watchdogChain
+    -I$LEGATO_BUILD/framework/libjansson/include
+}
+
+ldflags:
+{
+    -ljansson
+}
+
+requires:
+{
+    component:
+    {
+        $LEGATO_MODEM_PA_DEFAULT
+        $LEGATO_MODEM_PA
+
+        $LEGATO_MODEM_PA_ECALL_DEFAULT
+        $LEGATO_MODEM_PA_ECALL
+    }
+}
