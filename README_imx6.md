@@ -3,6 +3,11 @@ export RASPI_TOOLCHAIN_DIR=/home/XXXX/SDK/usr/bin/
 export RASPI_TOOLCHAIN_PREFIX=arm-linux-gnueabihf-
 export LEGATO_SYSROOT=/home/XXXX/SDK/usr/arm-buildroot-linux-gnueabihf/sysroot
 
+PC:sudo apt-get install autoconf automake libtool
+PC:apt-get install ninja-build 
+PC:apt install python-jinja2
+PC：vim Makefile 修改为awk -F: '/^[a-zA-Z0-9\/][a-zA-Z0-9._\/]*:([^=]|$$)/ {split($$1,A,/ /); for(i in A) print A[i]}'
+
 说明:1.SDK对应自己板子的交叉编译工具链.
      2.我的LEGATO_SYSROOT这个的设置为sysroot目录,有的是该目录的下一级子目录对应arm-linux-gnueabihf-所在的子目录,否则会报错
 
