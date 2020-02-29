@@ -24,6 +24,7 @@ PC:/etc/init.d/startlegato.sh→/ mnt / legato / start→/ legato / systems / cu
 
 说明:1.SDK对应自己板子的交叉编译工具链.
      2.我的LEGATO_SYSROOT这个的设置为sysroot目录,有的是该目录的下一级子目录对应arm-linux-gnueabihf-所在的子目录,否则会报错
+     3.编译一定需要编译内核，PC板需要编译些东西，忘记了
 
 
 2. 编译配置legato
