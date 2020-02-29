@@ -1,4 +1,5 @@
 1. 环境变量设置
+export RASPI_TARGET_ARCH=arm
 export RASPI_TOOLCHAIN_DIR=/home/XXXX/SDK/usr/bin/
 export RASPI_TOOLCHAIN_PREFIX=arm-linux-gnueabihf-
 export LEGATO_SYSROOT=/home/XXXX/SDK/usr/arm-buildroot-linux-gnueabihf/sysroot
@@ -7,6 +8,19 @@ PC:sudo apt-get install autoconf automake libtool
 PC:apt-get install ninja-build 
 PC:apt install python-jinja2
 PC：vim Makefile 修改为awk -F: '/^[a-zA-Z0-9\/][a-zA-Z0-9._\/]*:([^=]|$$)/ {split($$1,A,/ /); for(i in A) print A[i]}'
+pc:find -name "*adef" |xargs sed -i "s/restart/ignore/g" 更改看门狗执行方式，
+PC:touch /zlib/not/found     DISABLE_SMACK=1 make localhost
+PC:cp /home/share/legato/legato/build/localhost/_staging_system.localhost.update/* /mnt/legate
+PC:$ mkdir /mnt/flash
+PC:$ mkdir /mnt/legato
+PC:$ mkdir /legato
+PC:$ cp /lib/systemd/system/systemd-journald.service /etc/systemd/system/
+PC:/etc/systemd/system/systemd-journald.service
+PC:add "SmackProcessLabel=syslog" in [Service]
+PC:edit /etc/ssh/sshd_config
+PC:set PermitRootLogin to Yes.
+PC:./mnt/legato/start
+PC:/etc/init.d/startlegato.sh→/ mnt / legato / start→/ legato / systems / current / bin / startSystem→/ legato / systems / current / bin / supervisor根据需求一般/ legato / systems / current / bin / startSystem
 
 说明:1.SDK对应自己板子的交叉编译工具链.
      2.我的LEGATO_SYSROOT这个的设置为sysroot目录,有的是该目录的下一级子目录对应arm-linux-gnueabihf-所在的子目录,否则会报错
